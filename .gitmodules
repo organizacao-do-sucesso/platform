@@ -1,0 +1,3 @@
+[submodule "api/account"]
+	path = api/account
+	url = git@github.com:organizacao-do-sucesso/account.git
