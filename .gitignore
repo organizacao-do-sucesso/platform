@@ -1,3 +1,8 @@
 venv/
 .venv/
 site/
+
+# Ignore the entire VS Code configuration directory
+.vscode/
+
+.DS_Store
