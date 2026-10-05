@@ -6,3 +6,7 @@ site/
 .vscode/
 
 .DS_Store
+
+# API: local secrets and database data
+api/.env
+api/volume/
