@@ -10,3 +10,6 @@ site/
 # API: local secrets and database data
 api/.env
 api/volume/
+
+# curl cookie jars (contain JWTs)
+cookies.txt
