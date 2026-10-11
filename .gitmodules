@@ -13,3 +13,9 @@
 [submodule "api/gateway-service"]
 	path = api/gateway-service
 	url = https://github.com/organizacao-do-sucesso/gateway-service
+[submodule "api/product"]
+	path = api/product
+	url = https://github.com/organizacao-do-sucesso/product.git
+[submodule "api/product-service"]
+	path = api/product-service
+	url = https://github.com/organizacao-do-sucesso/product-service.git
