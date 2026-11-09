@@ -1,5 +1,9 @@
 name: store
 
+# metrics, logs and dashboards (submodule: organizacao-do-sucesso/observability)
+include:
+  - ./observability/compose.yaml
+
 services:
 
   db:
@@ -57,7 +61,29 @@ services:
     deploy:
       replicas: 1
     depends_on:
-      db:
+      - db
+
+  order:
+    build:
+      context: ./order-service
+      dockerfile: Dockerfile
+    hostname: order
+    environment:
+      DATABASE_HOST: db
+      DATABASE_PORT: 5432
+      DATABASE_DB: ${DB_NAME:-store}
+      DATABASE_USERNAME: ${DB_USER:-store}
+      DATABASE_PASSWORD: ${DB_PASSWORD:-devpass}
+    labels:
+      prometheus.scrape: "true"
+      prometheus.port: "8080"
+      prometheus.path: /order/actuator/prometheus
+      logs.collect: "true"
+    deploy:
+      replicas: 1
+    depends_on:
+      - db
+      - product
 
   gateway:
     build:
