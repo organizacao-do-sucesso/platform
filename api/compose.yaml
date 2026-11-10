@@ -17,6 +17,22 @@ services:
       POSTGRES_USER: ${DB_USER:-store}
       POSTGRES_PASSWORD: ${DB_PASSWORD:-devpass}
       POSTGRES_DB: ${DB_NAME:-store}
+    healthcheck:
+      # -h forces TCP: during initdb the temporary server only listens on the unix socket
+      test: [ "CMD-SHELL", "pg_isready -h 127.0.0.1 -U $$POSTGRES_USER -d $$POSTGRES_DB" ]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    hostname: redis
+    command: redis-server --save "" --appendonly no
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 5s
+      timeout: 3s
+      retries: 10
 
   account:
     build:
@@ -32,7 +48,8 @@ services:
     deploy:
       replicas: 1
     depends_on:
-      - db
+      db:
+        condition: service_healthy
 
   auth:
     build:
@@ -61,7 +78,8 @@ services:
     deploy:
       replicas: 1
     depends_on:
-      - db
+      db:
+        condition: service_healthy
 
   order:
     build:
@@ -82,8 +100,28 @@ services:
     deploy:
       replicas: 1
     depends_on:
-      - db
-      - product
+      db:
+        condition: service_healthy
+      product:
+        condition: service_started
+
+  exchange:
+    build:
+      context: ./exchange-service
+      dockerfile: Dockerfile
+    hostname: exchange
+    environment:
+      EXCHANGE_API_URL: ${EXCHANGE_API_URL:-https://economia.awesomeapi.com.br}
+      EXCHANGE_CACHE_TTL_SECONDS: ${EXCHANGE_CACHE_TTL_SECONDS:-60}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+    labels:
+      logs.collect: "true"
+    deploy:
+      replicas: 1
+    depends_on:
+      redis:
+        condition: service_healthy
 
   gateway:
     build:

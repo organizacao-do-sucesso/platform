@@ -28,3 +28,6 @@
 [submodule "api/observability"]
 	path = api/observability
 	url = https://github.com/organizacao-do-sucesso/observability.git
+[submodule "api/exchange-service"]
+	path = api/exchange-service
+	url = git@github.com:organizacao-do-sucesso/exchange-service.git
