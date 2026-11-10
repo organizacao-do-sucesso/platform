@@ -45,6 +45,9 @@ services:
       DATABASE_DB: ${DB_NAME:-store}
       DATABASE_USERNAME: ${DB_USER:-store}
       DATABASE_PASSWORD: ${DB_PASSWORD:-devpass}
+      ADMIN_NAME: ${ADMIN_NAME:-Store Administrator}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@store.local}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-admin}
     deploy:
       replicas: 1
     depends_on:
