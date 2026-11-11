@@ -31,3 +31,6 @@
 [submodule "api/exchange-service"]
 	path = api/exchange-service
 	url = git@github.com:organizacao-do-sucesso/exchange-service.git
+[submodule "api/exchange"]
+	path = api/exchange
+	url = git@github.com:organizacao-do-sucesso/exchange.git
