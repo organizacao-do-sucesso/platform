@@ -1,0 +1,10 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - namespace.yaml
+  - postgres.yaml
+  - https://github.com/organizacao-do-sucesso/account-service//k8s?ref=main&submodules=false
+  - https://github.com/organizacao-do-sucesso/auth-service//k8s?ref=main&submodules=false
+  - https://github.com/organizacao-do-sucesso/product-service//k8s?ref=main&submodules=false
+  - https://github.com/organizacao-do-sucesso/gateway-service//k8s?ref=main&submodules=false

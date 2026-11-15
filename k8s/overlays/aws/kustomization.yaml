@@ -1,0 +1,59 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../../base
+
+images:
+  - name: store/account
+    newName: rafaeldbo/account
+    newTag: latest
+  - name: store/auth
+    newName: rafaeldbo/auth
+    newTag: latest
+  - name: store/product
+    newName: rafaeldbo/product
+    newTag: latest
+  - name: store/gateway
+    newName: rafaeldbo/gateway
+    newTag: latest
+
+patches:
+  - path: postgres-emptydir.yaml
+  - target:
+      kind: Deployment
+      name: db
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/volumes/0
+        value:
+          name: data
+          emptyDir: {}
+  - target:
+      kind: Deployment
+      name: account
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/imagePullPolicy
+        value: Always
+  - target:
+      kind: Deployment
+      name: auth
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/imagePullPolicy
+        value: Always
+  - target:
+      kind: Deployment
+      name: product
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/imagePullPolicy
+        value: Always
+  - target:
+      kind: Deployment
+      name: gateway
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/imagePullPolicy
+        value: Always

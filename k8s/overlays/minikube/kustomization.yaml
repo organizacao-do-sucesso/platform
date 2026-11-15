@@ -1,0 +1,59 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../../base
+
+images:
+  - name: store/account
+    newName: store/account
+    newTag: local
+  - name: store/auth
+    newName: store/auth
+    newTag: local
+  - name: store/product
+    newName: store/product
+    newTag: local
+  - name: store/gateway
+    newName: store/gateway
+    newTag: local
+
+patches:
+  - target:
+      kind: Deployment
+      name: account
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/imagePullPolicy
+        value: Never
+  - target:
+      kind: Deployment
+      name: auth
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/imagePullPolicy
+        value: Never
+  - target:
+      kind: Deployment
+      name: product
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/imagePullPolicy
+        value: Never
+  - target:
+      kind: Deployment
+      name: gateway
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/imagePullPolicy
+        value: Never
+  - target:
+      kind: Service
+      name: gateway
+    patch: |-
+      - op: add
+        path: /spec/type
+        value: NodePort
+      - op: add
+        path: /spec/ports/0/nodePort
+        value: 30080
