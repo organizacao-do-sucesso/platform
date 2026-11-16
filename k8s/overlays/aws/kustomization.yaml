@@ -14,6 +14,9 @@ images:
   - name: store/product
     newName: rafaeldbo/product
     newTag: latest
+  - name: store/exchange
+    newName: rafaeldbo/exchange
+    newTag: latest
   - name: store/gateway
     newName: rafaeldbo/gateway
     newTag: latest
@@ -46,6 +49,13 @@ patches:
   - target:
       kind: Deployment
       name: product
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/imagePullPolicy
+        value: Always
+  - target:
+      kind: Deployment
+      name: exchange
     patch: |-
       - op: replace
         path: /spec/template/spec/containers/0/imagePullPolicy

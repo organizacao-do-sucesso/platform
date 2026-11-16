@@ -51,6 +51,10 @@ Invoke-Checked 'Criando imagem product no Minikube' {
     minikube image build -t store/product:local (Join-Path $apiRoot 'product-service')
 }
 
+Invoke-Checked 'Criando imagem exchange no Minikube' {
+    minikube image build -t store/exchange:local (Join-Path $apiRoot 'exchange-service')
+}
+
 Invoke-Checked 'Empacotando gateway-service' {
     mvn -B -f (Join-Path $apiRoot 'gateway-service/pom.xml') -DskipTests clean package
 }

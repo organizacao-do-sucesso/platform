@@ -116,8 +116,9 @@ services:
       dockerfile: Dockerfile
     hostname: exchange
     environment:
-      EXCHANGE_API_URL: ${EXCHANGE_API_URL:-https://economia.awesomeapi.com.br}
-      EXCHANGE_CACHE_TTL_SECONDS: ${EXCHANGE_CACHE_TTL_SECONDS:-60}
+      # PTAX (Central Bank of Brazil): public, no key, does not block cloud IPs
+      EXCHANGE_API_URL: ${EXCHANGE_API_URL:-https://olinda.bcb.gov.br/olinda/servico/PTAX/versao/v1/odata}
+      EXCHANGE_CACHE_TTL_SECONDS: ${EXCHANGE_CACHE_TTL_SECONDS:-300}
       REDIS_HOST: redis
       REDIS_PORT: 6379
     labels:

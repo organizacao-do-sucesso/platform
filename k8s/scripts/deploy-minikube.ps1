@@ -23,14 +23,14 @@ if ($LASTEXITCODE -ne 0) {
     throw "Não foi possível aplicar os manifests."
 }
 
-foreach ($deployment in @('account', 'auth', 'product', 'gateway')) {
+foreach ($deployment in @('account', 'auth', 'product', 'exchange', 'gateway')) {
     kubectl rollout restart "deployment/$deployment" -n store
     if ($LASTEXITCODE -ne 0) {
         throw "Não foi possível reiniciar deployment/$deployment."
     }
 }
 
-foreach ($deployment in @('db', 'account', 'auth', 'product', 'gateway')) {
+foreach ($deployment in @('db', 'redis', 'account', 'auth', 'product', 'exchange', 'gateway')) {
     Write-Host "Aguardando deployment/$deployment..." -ForegroundColor Cyan
     kubectl rollout status "deployment/$deployment" -n store --timeout=180s
     if ($LASTEXITCODE -ne 0) {
