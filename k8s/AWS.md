@@ -19,11 +19,17 @@ O último capítulo remove todos os recursos para encerrar a cobrança.
 - Dois NAT Gateways, um por zona de disponibilidade.
 - Cluster EKS: `eks-store`.
 - Managed node group: `default`.
-- Dois nodes EC2 `t2.small` nas subnets privadas.
+- Managed node group com mínimo de 1, capacidade inicial de 2 e máximo de 10
+  nodes EC2 `t2.small` nas subnets privadas.
+- Cluster Autoscaler ajustando automaticamente a quantidade de nodes.
 - PostgreSQL 17 efêmero, sem RDS e sem PVC adicional.
 - Microsserviços `account`, `auth`, `product` e `gateway`.
 - AWS Load Balancer Controller com EKS Pod Identity.
 - NLB público encaminhando a porta 80 para o gateway na porta 8080.
+
+Opcionalmente, a seção 10 instala o Metrics Server e cria um HPA para manter
+entre 1 e 10 réplicas do gateway com alvo de 50% de CPU. O HPA não é necessário
+para criar o cluster, executar a aplicação ou usar o Cluster Autoscaler.
 
 Os dados do PostgreSQL usam `emptyDir` e desaparecem quando o pod ou o
 namespace é removido. Essa configuração serve para teste, não para produção.
@@ -62,6 +68,8 @@ $NodeGroupName = 'default'
 $VpcStackName = 'store-vpc'
 $ClusterRoleName = 'eks-store-cluster-role'
 $NodeRoleName = 'eks-store-node-role'
+$CaRoleName = 'eks-store-cluster-autoscaler-role'
+$CaPolicyName = 'eks-store-cluster-autoscaler-policy'
 $LbcRoleName = 'eks-store-load-balancer-controller-role'
 $LbcPolicyName = 'AWSLoadBalancerControllerIAMPolicy'
 $AwsGuideTemp = Join-Path $env:TEMP 'store-eks-guide'
@@ -90,8 +98,10 @@ aws sts get-caller-identity --profile $Profile
 
 O usuário executor precisa conseguir administrar CloudFormation, VPC/EC2,
 EKS, ELBv2 e as roles/policies IAM deste guia. Também precisa de
-`iam:PassRole` limitado às roles do cluster, nodes e Load Balancer Controller.
-Em produção, use credenciais temporárias/MFA e uma policy de provisionamento
+`iam:PassRole` limitado às roles do cluster, dos nodes, do Cluster Autoscaler e
+do AWS Load Balancer Controller. A permissão para a role do Cluster Autoscaler
+é necessária ao criar sua associação de EKS Pod Identity na seção 8.3. Em
+produção, use credenciais temporárias/MFA e uma policy de provisionamento
 revisada.
 
 ## 4. Criar as roles IAM do EKS
@@ -329,35 +339,32 @@ kubectl get pods -n kube-system
 
 Somente continue quando os dois nodes estiverem `Ready`.
 
-## 8. Criar os pods dos microsserviços
+## 8. Ativar o escalonamento de nodes do cluster
 
-O overlay `k8s/overlays/aws` usa as imagens públicas, PostgreSQL efêmero e mantém o
-gateway inicialmente como `ClusterIP`.
+O Cluster Autoscaler aumenta ou reduz os nodes do managed node group quando há
+Pods sem capacidade para serem agendados ou nodes subutilizados. Ele atende ao
+cluster inteiro e não depende do HPA do gateway.
 
-```powershell
-kubectl kustomize ./k8s/overlays/aws
-./k8s/scripts/deploy-aws.ps1
-```
+O `maxSize=10` configurado no node group é apenas um limite. É o Cluster
+Autoscaler que altera a capacidade desejada dentro dos limites `minSize` e
+`maxSize`.
 
-O script cria no namespace `store` deployments e services para `db`,
-`account`, `auth`, `product` e `gateway`. Confirme:
+### Responsabilidade do guia e do script de deploy
 
-```powershell
-kubectl get deployments,pods,services -n store -o wide
-kubectl logs -n store deployment/account --tail=100
-kubectl logs -n store deployment/auth --tail=100
-kubectl logs -n store deployment/product --tail=100
-kubectl logs -n store deployment/gateway --tail=100
-```
+O Cluster Autoscaler não faz parte do overlay `k8s/overlays/aws`. O script
+`k8s/scripts/deploy-aws.ps1` aplica os Secrets e os recursos da aplicação, mas
+não instala o Cluster Autoscaler. Essa separação evita que um deploy da
+aplicação tente recriar recursos e permissões que pertencem ao ciclo de vida do
+cluster.
 
-Todos os deployments devem aparecer como `1/1` disponíveis.
+Em um cluster novo, execute as seções 8.1 a 8.3 uma vez. Em atualizações comuns
+da aplicação, o Cluster Autoscaler permanece instalado. Se o cluster for
+reconstruído, repita toda a seção 8.
 
-## 9. Instalar o AWS Load Balancer Controller
+### 8.1. Instalar o EKS Pod Identity Agent
 
-O controller criará o NLB de um `Service` do tipo `LoadBalancer`. O acesso IAM
-usa EKS Pod Identity, sem access keys dentro dos pods.
-
-### 9.1. Instalar o EKS Pod Identity Agent
+O Cluster Autoscaler e o AWS Load Balancer Controller usam EKS Pod Identity,
+sem access keys dentro dos Pods:
 
 ```powershell
 aws eks create-addon `
@@ -381,7 +388,257 @@ if ($PodIdentityStatus -ne 'ACTIVE') {
 }
 ```
 
-### 9.2. Criar a policy e a role do controller
+### 8.2. Criar a policy e a role do Cluster Autoscaler
+
+A policy limita as operações de escrita aos Auto Scaling Groups identificados
+pelas tags do cluster. As operações de leitura permanecem globais porque as
+APIs de consulta não oferecem escopo por recurso:
+
+```powershell
+$CaPolicyFile = Join-Path $AwsGuideTemp 'cluster-autoscaler-policy.json'
+
+@"
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "autoscaling:SetDesiredCapacity",
+        "autoscaling:TerminateInstanceInAutoScalingGroup"
+      ],
+      "Resource": "*",
+      "Condition": {
+        "StringEquals": {
+          "aws:ResourceTag/k8s.io/cluster-autoscaler/enabled": "true",
+          "aws:ResourceTag/k8s.io/cluster-autoscaler/$ClusterName": "owned"
+        }
+      }
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "autoscaling:DescribeAutoScalingGroups",
+        "autoscaling:DescribeAutoScalingInstances",
+        "autoscaling:DescribeLaunchConfigurations",
+        "autoscaling:DescribeScalingActivities",
+        "autoscaling:DescribeTags",
+        "ec2:DescribeImages",
+        "ec2:DescribeInstanceTypes",
+        "ec2:DescribeLaunchTemplateVersions",
+        "ec2:GetInstanceTypesFromInstanceRequirements",
+        "eks:DescribeNodegroup"
+      ],
+      "Resource": "*"
+    }
+  ]
+}
+"@ | Set-Content -Path $CaPolicyFile -Encoding utf8
+
+$CaPolicyUri = 'file://' + $CaPolicyFile.Replace('\', '/')
+$CaPolicyArn = aws iam create-policy `
+  --policy-name $CaPolicyName `
+  --policy-document $CaPolicyUri `
+  --query Policy.Arn --output text `
+  --profile $Profile
+```
+
+Crie uma role de Pod Identity restrita ao ServiceAccount do autoscaler:
+
+```powershell
+@'
+{
+  "Version": "2012-10-17",
+  "Statement": [{
+    "Sid": "AllowEksAuthToAssumeRoleForPodIdentity",
+    "Effect": "Allow",
+    "Principal": { "Service": "pods.eks.amazonaws.com" },
+    "Action": ["sts:AssumeRole", "sts:TagSession"],
+    "Condition": {
+      "StringEquals": {
+        "aws:RequestTag/kubernetes-namespace": "kube-system",
+        "aws:RequestTag/kubernetes-service-account": "cluster-autoscaler"
+      }
+    }
+  }]
+}
+'@ | Set-Content `
+  -Path (Join-Path $AwsGuideTemp 'cluster-autoscaler-pod-identity-trust.json') `
+  -Encoding utf8
+
+$CaTrustFile = (Join-Path $AwsGuideTemp 'cluster-autoscaler-pod-identity-trust.json').Replace('\', '/')
+
+aws iam create-role `
+  --role-name $CaRoleName `
+  --assume-role-policy-document "file://$CaTrustFile" `
+  --description 'EKS Pod Identity do Cluster Autoscaler' `
+  --profile $Profile
+
+aws iam attach-role-policy `
+  --role-name $CaRoleName `
+  --policy-arn $CaPolicyArn `
+  --profile $Profile
+
+$CaRoleArn = aws iam get-role `
+  --role-name $CaRoleName --query Role.Arn `
+  --output text --profile $Profile
+```
+
+### 8.3. Instalar o Cluster Autoscaler
+
+A versão do Cluster Autoscaler deve acompanhar a versão minor do Kubernetes.
+O chart usa autodiscovery para localizar o managed node group pelas tags do
+cluster:
+
+```powershell
+kubectl create serviceaccount cluster-autoscaler `
+  --namespace kube-system `
+  --dry-run=client -o yaml | kubectl apply -f -
+
+aws eks create-pod-identity-association `
+  --cluster-name $ClusterName `
+  --namespace kube-system `
+  --service-account cluster-autoscaler `
+  --role-arn $CaRoleArn `
+  --region $Region `
+  --profile $Profile
+
+helm repo add autoscaler https://kubernetes.github.io/autoscaler --force-update
+helm repo update autoscaler
+
+helm upgrade --install cluster-autoscaler `
+  autoscaler/cluster-autoscaler `
+  --namespace kube-system `
+  --set cloudProvider=aws `
+  --set awsRegion=$Region `
+  --set autoDiscovery.clusterName=$ClusterName `
+  --set image.tag=v1.37.0 `
+  --set rbac.serviceAccount.create=false `
+  --set rbac.serviceAccount.name=cluster-autoscaler `
+  --set resources.requests.cpu=100m `
+  --set resources.requests.memory=300Mi `
+  --set resources.limits.memory=500Mi `
+  --wait `
+  --timeout 5m
+
+kubectl rollout status `
+  deployment/cluster-autoscaler `
+  --namespace kube-system `
+  --timeout=300s
+
+kubectl logs `
+  deployment/cluster-autoscaler `
+  --namespace kube-system `
+  --tail=100
+```
+
+Os logs devem mostrar o node group descoberto, sem erros de credenciais ou de
+permissão.
+
+## 9. Criar os pods dos microsserviços
+
+O overlay `k8s/overlays/aws` usa as imagens públicas, PostgreSQL efêmero e mantém o
+gateway inicialmente como `ClusterIP`.
+
+```powershell
+kubectl kustomize ./k8s/overlays/aws
+./k8s/scripts/deploy-aws.ps1
+```
+
+O script cria no namespace `store` deployments e services para `db`,
+`account`, `auth`, `product` e `gateway`. Confirme:
+
+```powershell
+kubectl get deployments,pods,services -n store -o wide
+kubectl logs -n store deployment/account --tail=100
+kubectl logs -n store deployment/auth --tail=100
+kubectl logs -n store deployment/product --tail=100
+kubectl logs -n store deployment/gateway --tail=100
+```
+
+Todos os deployments devem aparecer como `1/1` disponíveis.
+## 10. Opcional: configurar o HPA do gateway
+
+O HPA aumenta ou reduz somente os Pods do Deployment `gateway`. Esta
+configuração é independente do Cluster Autoscaler da seção 8:
+
+- o HPA pode funcionar sem o Cluster Autoscaler, limitado à capacidade dos
+  nodes existentes;
+- o Cluster Autoscaler pode funcionar sem o HPA e atender qualquer Pod que não
+  consiga ser agendado por falta de capacidade.
+
+O `deploy-aws.ps1` não instala o Metrics Server nem cria o HPA. Execute esta
+seção somente quando quiser habilitar o escalonamento horizontal do gateway.
+
+### 10.1. Instalar o Metrics Server
+
+O HPA de CPU depende da API `metrics.k8s.io`. Instale uma versão compatível com
+o Kubernetes 1.37 usado neste guia:
+
+```powershell
+$MetricsServerManifest = 'https://github.com/kubernetes-sigs/metrics-server/releases/download/v0.9.0/components.yaml'
+
+kubectl apply -f $MetricsServerManifest
+kubectl rollout status `
+  deployment/metrics-server `
+  --namespace kube-system `
+  --timeout=300s
+
+kubectl get apiservice v1beta1.metrics.k8s.io
+kubectl top nodes
+```
+
+Somente continue quando a APIService aparecer como disponível e
+`kubectl top nodes` retornar métricas. O Metrics Server é instalado uma vez por
+cluster e pode ser usado por outros HPAs.
+
+### 10.2. Criar o HPA do gateway
+
+O gateway já declara `requests.cpu: 100m`, usado como base para calcular o
+percentual de utilização. O máximo de 10 réplicas é uma decisão do gateway e
+não representa nem depende do máximo de 10 nodes do managed node group.
+
+O HPA é criado de forma imperativa e não está incluído no Kustomize. Portanto,
+`deploy-aws.ps1` não o recria quando ele está ausente. Antes de criar, confira
+se o recurso já existe:
+
+```powershell
+$GatewayHpa = kubectl get hpa gateway `
+  --namespace store `
+  --ignore-not-found `
+  -o name
+
+if (-not $GatewayHpa) {
+  kubectl autoscale deployment gateway `
+    --namespace store `
+    --cpu=50% `
+    --min=1 `
+    --max=10
+}
+
+kubectl get hpa gateway --namespace store
+kubectl describe hpa gateway --namespace store
+```
+
+O campo `TARGETS` não deve exibir `<unknown>`. A partir deste ponto, o HPA
+gerencia `spec.replicas` do gateway; não altere manualmente sua quantidade de
+réplicas durante a execução normal. Recrie o HPA com esse mesmo procedimento
+depois de remover o namespace `store`, remover o próprio HPA ou reconstruir o
+cluster.
+
+Para confirmar os componentes do HPA antes de um teste de carga:
+
+```powershell
+kubectl get apiservice v1beta1.metrics.k8s.io
+kubectl get hpa gateway --namespace store
+```
+
+## 11. Instalar o AWS Load Balancer Controller
+
+O controller criará o NLB de um `Service` do tipo `LoadBalancer`. O acesso IAM
+usa o EKS Pod Identity Agent já instalado, sem access keys dentro dos Pods.
+
+### 11.1. Criar a policy e a role do controller
 
 Baixe a policy correspondente ao release mais recente do controller:
 
@@ -452,7 +709,7 @@ aws eks create-pod-identity-association `
   --profile $Profile
 ```
 
-### 9.3. Instalar o controller pelo Helm
+### 11.2. Instalar o controller pelo Helm
 
 ```powershell
 helm repo add eks https://aws.github.io/eks-charts --force-update
@@ -476,7 +733,7 @@ kubectl rollout status `
 kubectl get deployment aws-load-balancer-controller -n kube-system
 ```
 
-## 10. Expor o gateway na internet
+## 12. Expor o gateway na internet
 
 Crie um segundo Service. O service interno `gateway` permanece inalterado;
 `gateway-public` cria o NLB.
@@ -516,14 +773,23 @@ O resultado esperado sem autenticação é `401`. Para o fluxo completo, importe
 `store-product-api.postman_collection.json` e altere `baseUrl` para o valor de
 `$BaseUrl`.
 
-## 11. Diagnóstico rápido
+## 13. Diagnóstico rápido
+
+### 13.1. Cluster e aplicação
 
 ```powershell
 kubectl get pods -A -o wide
 kubectl get services -n store
 kubectl describe service gateway-public -n store
+kubectl logs -n kube-system deployment/cluster-autoscaler --tail=200
 kubectl logs -n kube-system deployment/aws-load-balancer-controller --tail=200
 kubectl get events -n store --sort-by='.lastTimestamp'
+
+aws eks describe-nodegroup `
+  --cluster-name $ClusterName `
+  --nodegroup-name $NodeGroupName `
+  --query 'nodegroup.scalingConfig' `
+  --region $Region --profile $Profile
 
 aws elbv2 describe-load-balancers `
   --region $Region --profile $Profile `
@@ -534,17 +800,35 @@ Problemas comuns:
 
 - `ImagePullBackOff`: confirme que `rafaeldbo/*:latest` está público.
 - pods reiniciando: confirme que `deployment/db` está pronto.
+- Pods permanecem `Pending` sem novos nodes: confira os logs, a Pod Identity e
+  a policy IAM do Cluster Autoscaler.
+- O Cluster Autoscaler deve usar a mesma versão minor do Kubernetes do cluster.
 - `EXTERNAL-IP` em `pending`: confira controller, Pod Identity, permissões e as
   tags `kubernetes.io/role/elb=1` das subnets públicas.
 - resposta `503`: aguarde os targets do NLB ficarem saudáveis e confira a probe
   do gateway.
 
-## 12. Remover tudo e encerrar a cobrança
+### 13.2. HPA opcional do gateway
+
+Execute estes comandos somente se a seção 10 tiver sido aplicada:
+
+```powershell
+kubectl get hpa gateway --namespace store
+kubectl describe hpa gateway --namespace store
+kubectl top nodes
+kubectl top pods --namespace store
+kubectl logs --namespace kube-system deployment/metrics-server --tail=200
+```
+
+Se `TARGETS` aparecer como `<unknown>`, confira a disponibilidade da APIService
+`v1beta1.metrics.k8s.io` e os logs do Metrics Server.
+
+## 14. Remover tudo e encerrar a cobrança
 
 Execute somente depois dos testes. A ordem é importante: NLB, aplicação,
 compute, control plane e rede.
 
-### 12.1. Remover o NLB público
+### 14.1. Remover o NLB público
 
 ```powershell
 $GatewayHost = kubectl get service gateway-public `
@@ -565,14 +849,60 @@ aws elbv2 describe-load-balancers `
 
 Não exclua o cluster ou a VPC enquanto o NLB ainda aparecer.
 
-### 12.2. Remover os microsserviços e o banco temporário
+### 14.2. Remover o HPA opcional do gateway
+
+Se a seção 10 foi aplicada, remova o HPA para que ele pare de alterar a
+quantidade de réplicas do gateway:
+
+```powershell
+kubectl delete hpa gateway --namespace store --ignore-not-found
+```
+
+O Metrics Server pode atender outros HPAs e não precisa ser removido junto com
+o gateway. Remova-o somente se nenhuma outra carga do cluster depender da API
+`metrics.k8s.io`:
+
+```powershell
+kubectl delete -f `
+  https://github.com/kubernetes-sigs/metrics-server/releases/download/v0.9.0/components.yaml `
+  --ignore-not-found
+```
+
+### 14.3. Remover o escalonamento de nodes do cluster
+
+Esta etapa remove somente o Cluster Autoscaler e sua associação de EKS Pod
+Identity. Ela não depende da instalação ou remoção do HPA do gateway:
+
+```powershell
+$CaAssociationId = aws eks list-pod-identity-associations `
+  --cluster-name $ClusterName `
+  --namespace kube-system `
+  --service-account cluster-autoscaler `
+  --query 'associations[0].associationId' `
+  --output text --region $Region --profile $Profile
+
+helm uninstall cluster-autoscaler --namespace kube-system
+
+if ($CaAssociationId -and $CaAssociationId -ne 'None') {
+  aws eks delete-pod-identity-association `
+    --cluster-name $ClusterName `
+    --association-id $CaAssociationId `
+    --region $Region --profile $Profile
+}
+
+kubectl delete serviceaccount cluster-autoscaler `
+  --namespace kube-system `
+  --ignore-not-found
+```
+
+### 14.4. Remover os microsserviços e o banco temporário
 
 ```powershell
 kubectl delete -k ./k8s/overlays/aws --wait=true --timeout=300s
 kubectl get namespace store --ignore-not-found
 ```
 
-### 12.3. Remover o Load Balancer Controller
+### 14.5. Remover o Load Balancer Controller e o Pod Identity Agent
 
 ```powershell
 $LbcAssociationId = aws eks list-pod-identity-associations `
@@ -597,7 +927,10 @@ aws eks delete-addon `
   --region $Region --profile $Profile
 ```
 
-### 12.4. Remover o node group
+O Pod Identity Agent só é removido depois dos dois controllers que dependiam
+dele.
+
+### 14.6. Remover o node group
 
 ```powershell
 aws eks delete-nodegroup `
@@ -611,7 +944,7 @@ aws eks wait nodegroup-deleted `
   --region $Region --profile $Profile
 ```
 
-### 12.5. Remover o cluster EKS
+### 14.7. Remover o cluster EKS
 
 ```powershell
 aws eks delete-cluster `
@@ -623,7 +956,7 @@ aws eks wait cluster-deleted `
   --region $Region --profile $Profile
 ```
 
-### 12.6. Remover a stack da VPC e os NAT Gateways
+### 14.8. Remover a stack da VPC e os NAT Gateways
 
 ```powershell
 aws cloudformation delete-stack `
@@ -638,12 +971,19 @@ aws cloudformation wait stack-delete-complete `
 A stack remove VPC, subnets, NAT Gateways, Elastic IPs, Internet Gateway, rotas
 e security group criados pelo template.
 
-### 12.7. Remover policies e roles IAM
+### 14.9. Remover policies e roles IAM
 
 Roles IAM não são cobradas, mas podem ser removidas para deixar a conta limpa.
 
 ```powershell
 $LbcPolicyArn = "arn:aws:iam::$AccountId`:policy/$LbcPolicyName"
+$CaPolicyArn = "arn:aws:iam::$AccountId`:policy/$CaPolicyName"
+
+aws iam detach-role-policy `
+  --role-name $CaRoleName --policy-arn $CaPolicyArn `
+  --profile $Profile
+aws iam delete-role --role-name $CaRoleName --profile $Profile
+aws iam delete-policy --policy-arn $CaPolicyArn --profile $Profile
 
 aws iam detach-role-policy `
   --role-name $LbcRoleName --policy-arn $LbcPolicyArn `
@@ -666,7 +1006,7 @@ aws iam detach-role-policy `
 aws iam delete-role --role-name $ClusterRoleName --profile $Profile
 ```
 
-### 12.8. Limpar o contexto e os arquivos temporários
+### 14.10. Limpar o contexto e os arquivos temporários
 
 ```powershell
 $EksContext = "arn:aws:eks:$Region`:$AccountId`:cluster/$ClusterName"
@@ -680,7 +1020,7 @@ Remove-Item -LiteralPath $AwsGuideTemp -Recurse -Force
 Antes da remoção, `$AwsGuideTemp` deve apontar para `store-eks-guide` dentro da
 pasta temporária, nunca para seu diretório pessoal ou para o repositório.
 
-## 13. Conferência final de cobrança
+## 15. Conferência final de cobrança
 
 ```powershell
 aws eks list-clusters --region $Region --profile $Profile
@@ -706,6 +1046,10 @@ nas listagens. Compare nomes, tags, VPC e ARNs antes de remover qualquer coisa.
 ## Referências oficiais
 
 - [Amazon EKS — clusters](https://docs.aws.amazon.com/eks/latest/userguide/clusters.html)
+- [Cluster Autoscaler no EKS](https://docs.aws.amazon.com/eks/latest/best-practices/cas.html)
+- [Chart oficial do Cluster Autoscaler](https://github.com/kubernetes/autoscaler/tree/master/charts/cluster-autoscaler)
+- [Metrics Server](https://github.com/kubernetes-sigs/metrics-server)
+- [Horizontal Pod Autoscaler](https://kubernetes.io/docs/tasks/run-application/horizontal-pod-autoscale-walkthrough/)
 - [AWS Load Balancer Controller](https://docs.aws.amazon.com/eks/latest/userguide/aws-load-balancer-controller.html)
 - [Instalação do controller com Helm](https://docs.aws.amazon.com/eks/latest/userguide/lbc-helm.html)
 - [Network Load Balancer no EKS](https://docs.aws.amazon.com/eks/latest/userguide/network-load-balancing.html)

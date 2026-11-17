@@ -23,7 +23,8 @@ Kubernetes `store`.
 - [`minikube.md`](minikube.md): tutorial de construção, implantação, acesso,
   diagnóstico e remoção no Minikube.
 - [`AWS.md`](AWS.md): tutorial completo de criação do ambiente AWS/EKS,
-  publicação do gateway e remoção dos recursos cobrados.
+  configuração independente do escalonamento de nodes e do HPA opcional do
+  gateway, publicação do gateway e remoção dos recursos cobrados.
 
 Os manifestos próprios de cada microsserviço ficam no diretório `k8s` de seu
 repositório. O arquivo `base/kustomization.yaml` consome essas bases diretamente
@@ -36,6 +37,36 @@ remotas durante o build. O parâmetro `submodules=false` evita baixar os
 submódulos internos dos serviços, pois eles não são necessários para renderizar
 os manifests. Para uma release imutável, substitua `ref=main` por uma tag nos
 recursos remotos.
+
+## Escalonamento na AWS
+
+O [`AWS.md`](AWS.md) mantém duas configurações independentes:
+
+### Nodes do cluster
+
+A seção 8 configura o Cluster Autoscaler para aumentar ou reduzir os nodes do
+managed node group. Essa é uma configuração do cluster, atende a todas as
+cargas e não depende do HPA do gateway.
+
+### Pods do gateway
+
+A seção 10 configura, opcionalmente, o Metrics Server e o HPA do gateway. O HPA
+altera somente a quantidade de Pods do Deployment `gateway` e pode funcionar
+sem o Cluster Autoscaler, enquanto houver capacidade nos nodes existentes. O
+Cluster Autoscaler também pode funcionar sem esse HPA.
+
+O repositório `gateway-service` declara `requests.cpu: 100m` no Deployment do
+gateway, usado pelo HPA para calcular a utilização percentual. O HPA não é
+necessário para implantar ou executar o gateway.
+
+O `deploy-aws.ps1` não instala o Cluster Autoscaler, o Metrics Server ou o HPA,
+e nenhum deles faz parte dos manifests do Kustomize. Cada configuração deve ser
+aplicada somente quando desejada, seguindo sua seção no [`AWS.md`](AWS.md).
+
+Ao preparar uma release, inclua as alterações deste guia e do README no commit
+da plataforma e confirme que a referência versionada do `gateway-service`
+aponta para um commit que contenha o request de CPU. Alterações presentes apenas
+no diretório de trabalho não acompanham um novo clone do repositório.
 
 ## Secrets locais
 
