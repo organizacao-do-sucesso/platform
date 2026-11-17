@@ -1,12 +1,12 @@
 # AWS/EKS pelo AWS CLI: criação, publicação e remoção
 
 Este guia cria na AWS o ambiente necessário para executar os microsserviços
-`account`, `auth`, `product` e `gateway`, com PostgreSQL temporário dentro do
-cluster. O gateway é publicado na internet por um Network Load Balancer (NLB).
+`account`, `auth`, `product` e `gateway`, com PostgreSQL gerenciado pelo Amazon
+RDS. O gateway é publicado na internet por um Network Load Balancer (NLB).
 O último capítulo remove todos os recursos para encerrar a cobrança.
 
 > **Atenção a custos:** a stack de rede cria dois NAT Gateways; o cluster EKS,
-> as instâncias EC2 do node group e o NLB também são cobrados enquanto
+> as instâncias EC2 do node group, o RDS e o NLB também são cobrados enquanto
 > existirem. Para um teste curto, execute o guia, valide a aplicação e faça a
 > remoção completa no mesmo dia.
 
@@ -22,17 +22,20 @@ O último capítulo remove todos os recursos para encerrar a cobrança.
 - Managed node group com mínimo de 1, capacidade inicial de 2 e máximo de 10
   nodes EC2 `t2.small` nas subnets privadas.
 - Cluster Autoscaler ajustando automaticamente a quantidade de nodes.
-- PostgreSQL 17 efêmero, sem RDS e sem PVC adicional.
+- RDS for PostgreSQL Single-AZ `db.t4g.micro`, com 20 GiB de armazenamento gp3
+  criptografado e endpoint privado.
 - Microsserviços `account`, `auth`, `product` e `gateway`.
 - AWS Load Balancer Controller com EKS Pod Identity.
 - NLB público encaminhando a porta 80 para o gateway na porta 8080.
 
-Opcionalmente, a seção 10 instala o Metrics Server e cria um HPA para manter
+Opcionalmente, a seção 11 instala o Metrics Server e cria um HPA para manter
 entre 1 e 10 réplicas do gateway com alvo de 50% de CPU. O HPA não é necessário
 para criar o cluster, executar a aplicação ou usar o Cluster Autoscaler.
 
-Os dados do PostgreSQL usam `emptyDir` e desaparecem quando o pod ou o
-namespace é removido. Essa configuração serve para teste, não para produção.
+O overlay AWS conecta `account` e `product` ao RDS. O PostgreSQL da base é
+mantido temporariamente para os serviços ainda não migrados, sem alterar o
+banco usado por `account` e `product`. O overlay Minikube continua usando o
+PostgreSQL definido na base.
 
 ## 2. Pré-requisitos locais
 
@@ -68,6 +71,9 @@ $NodeGroupName = 'default'
 $VpcStackName = 'store-vpc'
 $ClusterRoleName = 'eks-store-cluster-role'
 $NodeRoleName = 'eks-store-node-role'
+$RdsIdentifier = 'store-postgres'
+$RdsSubnetGroupName = 'store-postgres'
+$RdsSecurityGroupName = 'store-postgres'
 $CaRoleName = 'eks-store-cluster-autoscaler-role'
 $CaPolicyName = 'eks-store-cluster-autoscaler-policy'
 $LbcRoleName = 'eks-store-load-balancer-controller-role'
@@ -97,10 +103,10 @@ aws sts get-caller-identity --profile $Profile
 ```
 
 O usuário executor precisa conseguir administrar CloudFormation, VPC/EC2,
-EKS, ELBv2 e as roles/policies IAM deste guia. Também precisa de
+EKS, RDS, ELBv2 e as roles/policies IAM deste guia. Também precisa de
 `iam:PassRole` limitado às roles do cluster, dos nodes, do Cluster Autoscaler e
 do AWS Load Balancer Controller. A permissão para a role do Cluster Autoscaler
-é necessária ao criar sua associação de EKS Pod Identity na seção 8.3. Em
+é necessária ao criar sua associação de EKS Pod Identity na seção 9.3. Em
 produção, use credenciais temporárias/MFA e uma policy de provisionamento
 revisada.
 
@@ -339,7 +345,159 @@ kubectl get pods -n kube-system
 
 Somente continue quando os dois nodes estiverem `Ready`.
 
-## 8. Ativar o escalonamento de nodes do cluster
+## 8. Criar o PostgreSQL no Amazon RDS
+
+O RDS fica nas duas subnets privadas, não recebe endereço público e aceita
+conexões PostgreSQL somente dos recursos associados ao security group principal
+do cluster EKS. O DB subnet group usa duas zonas de disponibilidade, embora a
+instância de laboratório seja Single-AZ.
+
+O overlay AWS lê endpoint e credenciais de `api/.secrets/rds.env`. Prepare o
+arquivo local; ele será preenchido depois com a senha gerenciada pelo AWS
+Secrets Manager:
+
+```powershell
+if (-not (Test-Path 'api/.secrets/rds.env')) {
+  Copy-Item `
+    api/.secrets.example/rds.env `
+    api/.secrets/rds.env
+}
+
+$RdsEnvironmentFile = Resolve-Path 'api/.secrets/rds.env'
+```
+
+Crie o DB subnet group e o security group do banco:
+
+```powershell
+aws rds create-db-subnet-group `
+  --db-subnet-group-name $RdsSubnetGroupName `
+  --db-subnet-group-description 'Subnets privadas do PostgreSQL da Store' `
+  --subnet-ids $PrivateSubnetIds `
+  --tags Key=Project,Value=store `
+  --region $Region `
+  --profile $Profile
+
+$ClusterSecurityGroupId = aws eks describe-cluster `
+  --name $ClusterName `
+  --query 'cluster.resourcesVpcConfig.clusterSecurityGroupId' `
+  --output text `
+  --region $Region `
+  --profile $Profile
+
+$RdsSecurityGroupId = aws ec2 create-security-group `
+  --group-name $RdsSecurityGroupName `
+  --description 'PostgreSQL privado da Store' `
+  --vpc-id $VpcId `
+  --query GroupId `
+  --output text `
+  --region $Region `
+  --profile $Profile
+
+aws ec2 create-tags `
+  --resources $RdsSecurityGroupId `
+  --tags Key=Name,Value=$RdsSecurityGroupName Key=Project,Value=store `
+  --region $Region `
+  --profile $Profile
+
+aws ec2 authorize-security-group-ingress `
+  --group-id $RdsSecurityGroupId `
+  --protocol tcp `
+  --port 5432 `
+  --source-group $ClusterSecurityGroupId `
+  --region $Region `
+  --profile $Profile
+```
+
+Consulte a versão PostgreSQL mais recente oferecida para a classe correta,
+`db.t4g.micro`, e crie a instância:
+
+```powershell
+$RdsOptions = aws rds describe-orderable-db-instance-options `
+  --engine postgres `
+  --db-instance-class db.t4g.micro `
+  --region $Region `
+  --profile $Profile | ConvertFrom-Json
+
+$RdsEngineVersion = $RdsOptions.OrderableDBInstanceOptions.EngineVersion | `
+  Sort-Object { [version](($_ -replace '-.*$', '')) } -Descending | `
+  Select-Object -First 1
+
+aws rds create-db-instance `
+  --db-instance-identifier $RdsIdentifier `
+  --db-name store `
+  --db-instance-class db.t4g.micro `
+  --engine postgres `
+  --engine-version $RdsEngineVersion `
+  --master-username storeapp `
+  --manage-master-user-password `
+  --allocated-storage 20 `
+  --storage-type gp3 `
+  --storage-encrypted `
+  --db-subnet-group-name $RdsSubnetGroupName `
+  --vpc-security-group-ids $RdsSecurityGroupId `
+  --port 5432 `
+  --backup-retention-period 1 `
+  --no-publicly-accessible `
+  --no-multi-az `
+  --auto-minor-version-upgrade `
+  --enable-performance-insights `
+  --performance-insights-retention-period 7 `
+  --enable-cloudwatch-logs-exports postgresql `
+  --copy-tags-to-snapshot `
+  --tags Key=Project,Value=store Key=created_by,Value=rds-oss-skill Key=generation_model,Value=gpt-5 `
+  --region $Region `
+  --profile $Profile
+
+aws rds wait db-instance-available `
+  --db-instance-identifier $RdsIdentifier `
+  --region $Region `
+  --profile $Profile
+```
+
+Capture o endpoint privado e a referência da senha gerenciada. Grave os dados
+somente no arquivo local ignorado pelo Git, sem imprimir a senha:
+
+```powershell
+$RdsInstance = aws rds describe-db-instances `
+  --db-instance-identifier $RdsIdentifier `
+  --query 'DBInstances[0].{Endpoint:Endpoint.Address,Port:Endpoint.Port,SecretArn:MasterUserSecret.SecretArn}' `
+  --region $Region `
+  --profile $Profile | ConvertFrom-Json
+
+$RdsCredential = aws secretsmanager get-secret-value `
+  --secret-id $RdsInstance.SecretArn `
+  --query SecretString `
+  --output text `
+  --region $Region `
+  --profile $Profile | ConvertFrom-Json
+
+$RdsEnvironment = @(
+  "DATABASE_HOST=$($RdsInstance.Endpoint)"
+  "DATABASE_PORT=$($RdsInstance.Port)"
+  'DATABASE_DB=store'
+  "DATABASE_USERNAME=$($RdsCredential.username)"
+  "DATABASE_PASSWORD=$($RdsCredential.password)"
+)
+
+[System.IO.File]::WriteAllLines(
+  $RdsEnvironmentFile,
+  $RdsEnvironment,
+  [System.Text.UTF8Encoding]::new($false)
+)
+
+$RdsInstance.Endpoint
+Remove-Variable RdsCredential, RdsEnvironment
+```
+
+O endpoint não deve ser colocado em manifests versionados porque muda quando a
+instância é reconstruída. O Kustomize gera `rds-secret` a partir desse arquivo
+e o injeta em `account` e `product`.
+
+> **A cobrança do RDS começa quando a instância é provisionada e continua até
+> ela ser excluída. Parar a instância não interrompe a cobrança do
+> armazenamento.**
+
+## 9. Ativar o escalonamento de nodes do cluster
 
 O Cluster Autoscaler aumenta ou reduz os nodes do managed node group quando há
 Pods sem capacidade para serem agendados ou nodes subutilizados. Ele atende ao
@@ -357,11 +515,11 @@ não instala o Cluster Autoscaler. Essa separação evita que um deploy da
 aplicação tente recriar recursos e permissões que pertencem ao ciclo de vida do
 cluster.
 
-Em um cluster novo, execute as seções 8.1 a 8.3 uma vez. Em atualizações comuns
+Em um cluster novo, execute as seções 9.1 a 9.3 uma vez. Em atualizações comuns
 da aplicação, o Cluster Autoscaler permanece instalado. Se o cluster for
-reconstruído, repita toda a seção 8.
+reconstruído, repita toda a seção 9.
 
-### 8.1. Instalar o EKS Pod Identity Agent
+### 9.1. Instalar o EKS Pod Identity Agent
 
 O Cluster Autoscaler e o AWS Load Balancer Controller usam EKS Pod Identity,
 sem access keys dentro dos Pods:
@@ -388,7 +546,7 @@ if ($PodIdentityStatus -ne 'ACTIVE') {
 }
 ```
 
-### 8.2. Criar a policy e a role do Cluster Autoscaler
+### 9.2. Criar a policy e a role do Cluster Autoscaler
 
 A policy limita as operações de escrita aos Auto Scaling Groups identificados
 pelas tags do cluster. As operações de leitura permanecem globais porque as
@@ -484,7 +642,7 @@ $CaRoleArn = aws iam get-role `
   --output text --profile $Profile
 ```
 
-### 8.3. Instalar o Cluster Autoscaler
+### 9.3. Instalar o Cluster Autoscaler
 
 A versão do Cluster Autoscaler deve acompanhar a versão minor do Kubernetes.
 O chart usa autodiscovery para localizar o managed node group pelas tags do
@@ -535,13 +693,17 @@ kubectl logs `
 Os logs devem mostrar o node group descoberto, sem erros de credenciais ou de
 permissão.
 
-## 9. Criar os pods dos microsserviços
+## 10. Criar os pods dos microsserviços
 
-O overlay `k8s/overlays/aws` usa as imagens públicas, PostgreSQL efêmero e mantém o
-gateway inicialmente como `ClusterIP`.
+O overlay `k8s/overlays/aws` usa as imagens públicas, conecta `account` e
+`product` ao RDS por meio do `rds-secret` e mantém o gateway inicialmente como
+`ClusterIP`. O PostgreSQL interno permanece disponível somente para os serviços
+ainda não migrados.
 
 ```powershell
-kubectl kustomize ./k8s/overlays/aws
+kubectl kustomize `
+  ./k8s/overlays/aws `
+  --load-restrictor LoadRestrictionsNone
 ./k8s/scripts/deploy-aws.ps1
 ```
 
@@ -554,13 +716,24 @@ kubectl logs -n store deployment/account --tail=100
 kubectl logs -n store deployment/auth --tail=100
 kubectl logs -n store deployment/product --tail=100
 kubectl logs -n store deployment/gateway --tail=100
+kubectl get deployment/db service/db --namespace store
+
+aws rds describe-db-instances `
+  --db-instance-identifier $RdsIdentifier `
+  --query 'DBInstances[0].{status:DBInstanceStatus,endpoint:Endpoint.Address,public:PubliclyAccessible}' `
+  --region $Region `
+  --profile $Profile
 ```
 
+O RDS deve aparecer como `available`, com endpoint preenchido e `public` igual
+a `false`. `Account` e `product` devem referenciar `rds-secret`.
+
 Todos os deployments devem aparecer como `1/1` disponíveis.
-## 10. Opcional: configurar o HPA do gateway
+
+## 11. Opcional: configurar o HPA do gateway
 
 O HPA aumenta ou reduz somente os Pods do Deployment `gateway`. Esta
-configuração é independente do Cluster Autoscaler da seção 8:
+configuração é independente do Cluster Autoscaler da seção 9:
 
 - o HPA pode funcionar sem o Cluster Autoscaler, limitado à capacidade dos
   nodes existentes;
@@ -570,7 +743,7 @@ configuração é independente do Cluster Autoscaler da seção 8:
 O `deploy-aws.ps1` não instala o Metrics Server nem cria o HPA. Execute esta
 seção somente quando quiser habilitar o escalonamento horizontal do gateway.
 
-### 10.1. Instalar o Metrics Server
+### 11.1. Instalar o Metrics Server
 
 O HPA de CPU depende da API `metrics.k8s.io`. Instale uma versão compatível com
 o Kubernetes 1.37 usado neste guia:
@@ -592,7 +765,7 @@ Somente continue quando a APIService aparecer como disponível e
 `kubectl top nodes` retornar métricas. O Metrics Server é instalado uma vez por
 cluster e pode ser usado por outros HPAs.
 
-### 10.2. Criar o HPA do gateway
+### 11.2. Criar o HPA do gateway
 
 O gateway já declara `requests.cpu: 100m`, usado como base para calcular o
 percentual de utilização. O máximo de 10 réplicas é uma decisão do gateway e
@@ -633,12 +806,12 @@ kubectl get apiservice v1beta1.metrics.k8s.io
 kubectl get hpa gateway --namespace store
 ```
 
-## 11. Instalar o AWS Load Balancer Controller
+## 12. Instalar o AWS Load Balancer Controller
 
 O controller criará o NLB de um `Service` do tipo `LoadBalancer`. O acesso IAM
 usa o EKS Pod Identity Agent já instalado, sem access keys dentro dos Pods.
 
-### 11.1. Criar a policy e a role do controller
+### 12.1. Criar a policy e a role do controller
 
 Baixe a policy correspondente ao release mais recente do controller:
 
@@ -709,7 +882,7 @@ aws eks create-pod-identity-association `
   --profile $Profile
 ```
 
-### 11.2. Instalar o controller pelo Helm
+### 12.2. Instalar o controller pelo Helm
 
 ```powershell
 helm repo add eks https://aws.github.io/eks-charts --force-update
@@ -733,7 +906,7 @@ kubectl rollout status `
 kubectl get deployment aws-load-balancer-controller -n kube-system
 ```
 
-## 12. Expor o gateway na internet
+## 13. Expor o gateway na internet
 
 Crie um segundo Service. O service interno `gateway` permanece inalterado;
 `gateway-public` cria o NLB.
@@ -773,9 +946,9 @@ O resultado esperado sem autenticação é `401`. Para o fluxo completo, importe
 `store-product-api.postman_collection.json` e altere `baseUrl` para o valor de
 `$BaseUrl`.
 
-## 13. Diagnóstico rápido
+## 14. Diagnóstico rápido
 
-### 13.1. Cluster e aplicação
+### 14.1. Cluster e aplicação
 
 ```powershell
 kubectl get pods -A -o wide
@@ -784,6 +957,12 @@ kubectl describe service gateway-public -n store
 kubectl logs -n kube-system deployment/cluster-autoscaler --tail=200
 kubectl logs -n kube-system deployment/aws-load-balancer-controller --tail=200
 kubectl get events -n store --sort-by='.lastTimestamp'
+
+aws rds describe-db-instances `
+  --db-instance-identifier $RdsIdentifier `
+  --query 'DBInstances[0].{status:DBInstanceStatus,endpoint:Endpoint.Address,securityGroups:VpcSecurityGroups}' `
+  --region $Region `
+  --profile $Profile
 
 aws eks describe-nodegroup `
   --cluster-name $ClusterName `
@@ -799,7 +978,8 @@ aws elbv2 describe-load-balancers `
 Problemas comuns:
 
 - `ImagePullBackOff`: confirme que `rafaeldbo/*:latest` está público.
-- pods reiniciando: confirme que `deployment/db` está pronto.
+- `account` ou `product` reiniciando: confirme o status do RDS, o endpoint em
+  `api/.secrets/rds.env`, o `rds-secret` e a regra TCP 5432 do security group.
 - Pods permanecem `Pending` sem novos nodes: confira os logs, a Pod Identity e
   a policy IAM do Cluster Autoscaler.
 - O Cluster Autoscaler deve usar a mesma versão minor do Kubernetes do cluster.
@@ -808,9 +988,9 @@ Problemas comuns:
 - resposta `503`: aguarde os targets do NLB ficarem saudáveis e confira a probe
   do gateway.
 
-### 13.2. HPA opcional do gateway
+### 14.2. HPA opcional do gateway
 
-Execute estes comandos somente se a seção 10 tiver sido aplicada:
+Execute estes comandos somente se a seção 11 tiver sido aplicada:
 
 ```powershell
 kubectl get hpa gateway --namespace store
@@ -823,12 +1003,12 @@ kubectl logs --namespace kube-system deployment/metrics-server --tail=200
 Se `TARGETS` aparecer como `<unknown>`, confira a disponibilidade da APIService
 `v1beta1.metrics.k8s.io` e os logs do Metrics Server.
 
-## 14. Remover tudo e encerrar a cobrança
+## 15. Remover tudo e encerrar a cobrança
 
 Execute somente depois dos testes. A ordem é importante: NLB, aplicação,
 compute, control plane e rede.
 
-### 14.1. Remover o NLB público
+### 15.1. Remover o NLB público
 
 ```powershell
 $GatewayHost = kubectl get service gateway-public `
@@ -849,9 +1029,9 @@ aws elbv2 describe-load-balancers `
 
 Não exclua o cluster ou a VPC enquanto o NLB ainda aparecer.
 
-### 14.2. Remover o HPA opcional do gateway
+### 15.2. Remover o HPA opcional do gateway
 
-Se a seção 10 foi aplicada, remova o HPA para que ele pare de alterar a
+Se a seção 11 foi aplicada, remova o HPA para que ele pare de alterar a
 quantidade de réplicas do gateway:
 
 ```powershell
@@ -868,7 +1048,7 @@ kubectl delete -f `
   --ignore-not-found
 ```
 
-### 14.3. Remover o escalonamento de nodes do cluster
+### 15.3. Remover o escalonamento de nodes do cluster
 
 Esta etapa remove somente o Cluster Autoscaler e sua associação de EKS Pod
 Identity. Ela não depende da instalação ou remoção do HPA do gateway:
@@ -895,14 +1075,17 @@ kubectl delete serviceaccount cluster-autoscaler `
   --ignore-not-found
 ```
 
-### 14.4. Remover os microsserviços e o banco temporário
+### 15.4. Remover os microsserviços
 
 ```powershell
-kubectl delete -k ./k8s/overlays/aws --wait=true --timeout=300s
+kubectl kustomize `
+  ./k8s/overlays/aws `
+  --load-restrictor LoadRestrictionsNone | `
+  kubectl delete -f - --wait=true --timeout=300s
 kubectl get namespace store --ignore-not-found
 ```
 
-### 14.5. Remover o Load Balancer Controller e o Pod Identity Agent
+### 15.5. Remover o Load Balancer Controller e o Pod Identity Agent
 
 ```powershell
 $LbcAssociationId = aws eks list-pod-identity-associations `
@@ -930,7 +1113,45 @@ aws eks delete-addon `
 O Pod Identity Agent só é removido depois dos dois controllers que dependiam
 dele.
 
-### 14.6. Remover o node group
+### 15.6. Remover o RDS
+
+O comando abaixo elimina o banco sem snapshot final e causa perda irreversível
+dos dados. Use-o somente para encerrar o ambiente de laboratório:
+
+```powershell
+$RdsSecurityGroupId = aws ec2 describe-security-groups `
+  --filters `
+    "Name=vpc-id,Values=$VpcId" `
+    "Name=group-name,Values=$RdsSecurityGroupName" `
+  --query 'SecurityGroups[0].GroupId' `
+  --output text `
+  --region $Region `
+  --profile $Profile
+
+aws rds delete-db-instance `
+  --db-instance-identifier $RdsIdentifier `
+  --skip-final-snapshot `
+  --delete-automated-backups `
+  --region $Region `
+  --profile $Profile
+
+aws rds wait db-instance-deleted `
+  --db-instance-identifier $RdsIdentifier `
+  --region $Region `
+  --profile $Profile
+
+aws rds delete-db-subnet-group `
+  --db-subnet-group-name $RdsSubnetGroupName `
+  --region $Region `
+  --profile $Profile
+
+aws ec2 delete-security-group `
+  --group-id $RdsSecurityGroupId `
+  --region $Region `
+  --profile $Profile
+```
+
+### 15.7. Remover o node group
 
 ```powershell
 aws eks delete-nodegroup `
@@ -944,7 +1165,7 @@ aws eks wait nodegroup-deleted `
   --region $Region --profile $Profile
 ```
 
-### 14.7. Remover o cluster EKS
+### 15.8. Remover o cluster EKS
 
 ```powershell
 aws eks delete-cluster `
@@ -956,7 +1177,7 @@ aws eks wait cluster-deleted `
   --region $Region --profile $Profile
 ```
 
-### 14.8. Remover a stack da VPC e os NAT Gateways
+### 15.9. Remover a stack da VPC e os NAT Gateways
 
 ```powershell
 aws cloudformation delete-stack `
@@ -971,7 +1192,7 @@ aws cloudformation wait stack-delete-complete `
 A stack remove VPC, subnets, NAT Gateways, Elastic IPs, Internet Gateway, rotas
 e security group criados pelo template.
 
-### 14.9. Remover policies e roles IAM
+### 15.10. Remover policies e roles IAM
 
 Roles IAM não são cobradas, mas podem ser removidas para deixar a conta limpa.
 
@@ -1006,7 +1227,7 @@ aws iam detach-role-policy `
 aws iam delete-role --role-name $ClusterRoleName --profile $Profile
 ```
 
-### 14.10. Limpar o contexto e os arquivos temporários
+### 15.11. Limpar o contexto e os arquivos temporários
 
 ```powershell
 $EksContext = "arn:aws:eks:$Region`:$AccountId`:cluster/$ClusterName"
@@ -1020,10 +1241,15 @@ Remove-Item -LiteralPath $AwsGuideTemp -Recurse -Force
 Antes da remoção, `$AwsGuideTemp` deve apontar para `store-eks-guide` dentro da
 pasta temporária, nunca para seu diretório pessoal ou para o repositório.
 
-## 15. Conferência final de cobrança
+## 16. Conferência final de cobrança
 
 ```powershell
 aws eks list-clusters --region $Region --profile $Profile
+
+aws rds describe-db-instances `
+  --query 'DBInstances[].[DBInstanceIdentifier,DBInstanceStatus,Endpoint.Address]' `
+  --region $Region `
+  --profile $Profile
 
 aws cloudformation list-stacks `
   --stack-status-filter DELETE_COMPLETE `
@@ -1046,6 +1272,9 @@ nas listagens. Compare nomes, tags, VPC e ARNs antes de remover qualquer coisa.
 ## Referências oficiais
 
 - [Amazon EKS — clusters](https://docs.aws.amazon.com/eks/latest/userguide/clusters.html)
+- [RDS for PostgreSQL](https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/CHAP_PostgreSQL.html)
+- [Criar uma instância RDS](https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/USER_CreateDBInstance.html)
+- [Acesso privado ao RDS em uma VPC](https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/USER_VPC.Scenarios.html)
 - [Cluster Autoscaler no EKS](https://docs.aws.amazon.com/eks/latest/best-practices/cas.html)
 - [Chart oficial do Cluster Autoscaler](https://github.com/kubernetes/autoscaler/tree/master/charts/cluster-autoscaler)
 - [Metrics Server](https://github.com/kubernetes-sigs/metrics-server)

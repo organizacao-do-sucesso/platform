@@ -4,6 +4,15 @@ kind: Kustomization
 resources:
   - ../../base
 
+secretGenerator:
+  - name: rds-secret
+    namespace: store
+    envs:
+      - ../../../api/.secrets/rds.env
+
+generatorOptions:
+  disableNameSuffixHash: true
+
 images:
   - name: store/account
     newName: rafaeldbo/account
@@ -39,6 +48,11 @@ patches:
       - op: replace
         path: /spec/template/spec/containers/0/imagePullPolicy
         value: Always
+      - op: add
+        path: /spec/template/spec/containers/0/envFrom/-
+        value:
+          secretRef:
+            name: rds-secret
   - target:
       kind: Deployment
       name: auth
@@ -53,6 +67,11 @@ patches:
       - op: replace
         path: /spec/template/spec/containers/0/imagePullPolicy
         value: Always
+      - op: add
+        path: /spec/template/spec/containers/0/envFrom/-
+        value:
+          secretRef:
+            name: rds-secret
   - target:
       kind: Deployment
       name: exchange

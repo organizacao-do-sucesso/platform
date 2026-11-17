@@ -1,8 +1,9 @@
 # Kubernetes da Store
 
 Esta pasta contém os manifestos compartilhados, scripts de implantação e guias
-para executar PostgreSQL, account, auth, product e gateway no namespace
-Kubernetes `store`.
+para executar account, auth, product e gateway no namespace Kubernetes `store`.
+No Minikube, o PostgreSQL também executa no cluster; na AWS, os serviços usam
+uma instância privada do Amazon RDS.
 
 ## Conteúdo
 
@@ -10,8 +11,8 @@ Kubernetes `store`.
   microsserviços.
 - [`overlays/minikube`](overlays/minikube): imagens locais e exposição
   `NodePort` para o Minikube.
-- [`overlays/aws`](overlays/aws): imagens do Docker Hub, PostgreSQL efêmero e
-  manifesto opcional do gateway público.
+- [`overlays/aws`](overlays/aws): imagens do Docker Hub, conexão privada com o
+  RDS e manifesto opcional do gateway público.
 - [`scripts/build-images.ps1`](../scripts/build-images.ps1): compila os projetos e
   constrói as imagens locais dentro do Minikube.
 - [`scripts/apply-secrets.ps1`](scripts/apply-secrets.ps1): valida os arquivos
@@ -44,13 +45,13 @@ O [`AWS.md`](AWS.md) mantém duas configurações independentes:
 
 ### Nodes do cluster
 
-A seção 8 configura o Cluster Autoscaler para aumentar ou reduzir os nodes do
+A seção 9 configura o Cluster Autoscaler para aumentar ou reduzir os nodes do
 managed node group. Essa é uma configuração do cluster, atende a todas as
 cargas e não depende do HPA do gateway.
 
 ### Pods do gateway
 
-A seção 10 configura, opcionalmente, o Metrics Server e o HPA do gateway. O HPA
+A seção 11 configura, opcionalmente, o Metrics Server e o HPA do gateway. O HPA
 altera somente a quantidade de Pods do Deployment `gateway` e pode funcionar
 sem o Cluster Autoscaler, enquanto houver capacidade nos nodes existentes. O
 Cluster Autoscaler também pode funcionar sem esse HPA.
@@ -62,6 +63,21 @@ necessário para implantar ou executar o gateway.
 O `deploy-aws.ps1` não instala o Cluster Autoscaler, o Metrics Server ou o HPA,
 e nenhum deles faz parte dos manifests do Kustomize. Cada configuração deve ser
 aplicada somente quando desejada, seguindo sua seção no [`AWS.md`](AWS.md).
+
+## Banco de dados na AWS
+
+A seção 8 de [`AWS.md`](AWS.md) cria um RDS for PostgreSQL Single-AZ
+`db.t4g.micro`, privado e criptografado. O overlay AWS gera `rds-secret` a
+partir do arquivo ignorado `api/.secrets/rds.env` e o injeta somente em
+`account` e `product`.
+
+O endpoint do RDS não é versionado. Depois de criar ou reconstruir a instância,
+atualize `DATABASE_HOST` no arquivo local antes de executar `deploy-aws.ps1`.
+O usuário e a senha mestre são gerenciados pelo AWS Secrets Manager e copiados
+para esse arquivo local sem serem exibidos no terminal.
+O PostgreSQL definido em `base/postgres.yaml` permanece disponível no Minikube
+e, temporariamente, no overlay AWS para os serviços ainda não migrados. Por
+isso, a migração de `account` e `product` não interrompe esses serviços.
 
 Ao preparar uma release, inclua as alterações deste guia e do README no commit
 da plataforma e confirme que a referência versionada do `gateway-service`
@@ -77,6 +93,10 @@ em `api/.secrets`, que é ignorado pelo Git. Para preparar um clone novo:
 New-Item -ItemType Directory -Force api/.secrets | Out-Null
 Copy-Item api/.secrets.example/*.env api/.secrets/
 ```
+
+No overlay AWS, `rds.env` precisa conter o endpoint privado retornado pelo RDS.
+O Kustomize usa esse arquivo para gerar `rds-secret`; o script de deploy rejeita
+o valor de exemplo `CHANGE_ME_RDS_ENDPOINT`.
 
 Os scripts de deploy interrompem a execução se algum arquivo, chave ou valor obrigatório estiver ausente. Antes de
 aplicar o Kustomize, eles executam `scripts/apply-secrets.ps1`, que cria ou

@@ -25,14 +25,19 @@ Os arquivos esperados são:
 | Arquivo | Secret Kubernetes | Conteúdo |
 | --- | --- | --- |
 | `postgres.env` | `postgres-secret` | Usuário e senha usados pelo PostgreSQL |
+| `rds.env` | `rds-secret` | Endpoint privado e credenciais do RDS usados somente no overlay AWS |
 | `auth.env` | `auth-secret` | Chave Base64 usada para assinar os JWTs |
 | `account.env` | `account-secret` | Credenciais do banco e senha inicial do administrador |
 | `product.env` | `product-secret` | Credenciais do banco do serviço de produtos |
 
 ## Cuidados importantes
 
-- Mantenha a senha do PostgreSQL igual em `postgres.env`, `account.env` e
-  `product.env`.
+- `postgres.env` é usado pelo PostgreSQL executado dentro do Minikube.
+- No overlay AWS, preencha `DATABASE_HOST` de `rds.env` com o endpoint privado
+  criado pelo RDS e mantenha `DATABASE_USERNAME` e `DATABASE_PASSWORD` iguais
+  ao usuário mestre configurado na instância.
+- O `rds-secret` é gerado pelo Kustomize do overlay AWS e sobrescreve as
+  configurações de banco de `account` e `product`.
 - `JWT_SECRET_KEY` deve ser uma chave aleatória codificada em Base64, com pelo
   menos 32 bytes depois da decodificação.
 - `ADMIN_PASSWORD` é usado para criar o administrador quando ele ainda não
@@ -50,4 +55,5 @@ Valide os arquivos locais sem acessar nenhum cluster:
 ```
 
 Os scripts `deploy-minikube.ps1` e `deploy-aws.ps1` executam a aplicação dos
-Secrets automaticamente antes de aplicar o overlay Kustomize.
+Secrets automaticamente antes de aplicar o overlay Kustomize. No deploy AWS,
+o script também valida `rds.env`; o endpoint com `CHANGE_ME` não é aceito.
