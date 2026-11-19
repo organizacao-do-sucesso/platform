@@ -1,7 +1,8 @@
 # Kubernetes da Store
 
 Esta pasta contém os manifestos compartilhados, scripts de implantação e guias
-para executar account, auth, product e gateway no namespace Kubernetes `store`.
+para executar account, auth, product, exchange, order, gateway e a stack de
+observabilidade (Prometheus, Loki, Alloy e Grafana) no namespace Kubernetes `store`.
 No Minikube, o PostgreSQL também executa no cluster; na AWS, os serviços usam
 uma instância privada do Amazon RDS.
 
@@ -18,9 +19,9 @@ uma instância privada do Amazon RDS.
 - [`scripts/apply-secrets.ps1`](scripts/apply-secrets.ps1): valida os arquivos
   locais ignorados pelo Git e cria ou atualiza os Secrets do namespace `store`.
 - [`scripts/deploy-minikube.ps1`](scripts/deploy-minikube.ps1): aplica o overlay
-  local e aguarda os cinco Deployments.
+  local e aguarda todos os Deployments.
 - [`scripts/deploy-aws.ps1`](scripts/deploy-aws.ps1): aplica o overlay do EKS e
-  acompanha os cinco Deployments na AWS.
+  acompanha todos os Deployments na AWS.
 - [`minikube.md`](minikube.md): tutorial de construção, implantação, acesso,
   diagnóstico e remoção no Minikube.
 - [`AWS.md`](AWS.md): tutorial completo de criação do ambiente AWS/EKS,
@@ -108,3 +109,23 @@ Valide os arquivos locais sem acessar nenhum cluster:
 ```powershell
 ./k8s/scripts/apply-secrets.ps1 -ValidateOnly
 ```
+
+## Observabilidade
+
+A base também consome o repositório `observability`, cuja `kustomization.yaml`
+fica na raiz para reaproveitar as mesmas configurações do Docker Compose (Loki,
+datasources e dashboard do Grafana). Ela cria no namespace `store`:
+
+- **Prometheus**, que descobre pela API do Kubernetes os pods anotados com
+  `prometheus.io/scrape: "true"` (hoje, o `order`);
+- **Alloy**, que envia ao Loki os logs de todos os pods do namespace;
+- **Loki** e **Grafana**, com o dashboard *Store - Services* provisionado.
+
+Nada disso é exposto diretamente: o gateway encaminha `/grafana/**` (rota
+pública, protegida pelo login do Grafana) e `/prometheus/**` (exige login da
+loja com o papel `administrator`). O `grafana-secret` vem de
+`api/.secrets/grafana.env`; troque a senha de exemplo antes do deploy.
+
+Na AWS, ajuste `OBSERVABILITY_PUBLIC_URL` no ConfigMap `observability-config`
+para o endereço público do gateway, usado pelo Grafana e pelo Prometheus para
+montar links e redirecionamentos.

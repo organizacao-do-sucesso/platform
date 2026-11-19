@@ -1,0 +1,1 @@
+--8<-- "k8s/minikube.md"
