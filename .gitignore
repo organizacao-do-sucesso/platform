@@ -36,3 +36,6 @@ api/volume/
 
 # curl cookie jars (contain JWTs)
 cookies.txt
+
+# end-to-end test log
+test-e2e.log

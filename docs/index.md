@@ -41,6 +41,7 @@ um de **implementação**, incluídos como submódulos neste repositório princi
 | Kubernetes local (MiniKube) | :material-check: manifests prontos (falta o vídeo) | [MiniKube](deploy/minikube.md) |
 | AWS e EKS, com RDS | :material-check: guia e manifests prontos | [AWS e EKS](deploy/aws.md) |
 | CI/CD com Jenkins | :material-progress-clock: em andamento | [CI/CD](deploy/ci-cd.md) |
+| Testes de ponta a ponta (21 cenários) | :material-check: concluído | [Testes](testes.md) |
 | Teste de carga com HPA | :material-progress-clock: pendente | [Teste de carga](testes-de-carga.md) |
 | Custos, PaaS e SLA | :material-check: concluído | [Custos, PaaS e SLA](custos/index.md) |
 | Apresentação (vídeo de 1 a 2 min) | :material-progress-clock: pendente | — |
