@@ -12,6 +12,24 @@ O Jenkins roda em contêiner (`api/jenkins/compose.yaml`), com Maven, Docker,
 | Build & Push Image | Imagem multi-arquitetura (`amd64` e `arm64`) enviada ao Docker Hub com as tags `latest` e o número do build |
 | Deploy to K8s | Atualiza a imagem do Deployment no EKS e aguarda o rollout |
 
+## Imagens no Docker Hub
+
+O estágio *Build & Push Image* publica cada serviço no Docker Hub, de onde o EKS
+baixa as imagens (overlay `k8s/overlays/aws`).
+
+| Serviço | Imagem |
+| --- | --- |
+| account | [`rafaeldbo/account`](https://hub.docker.com/r/rafaeldbo/account){ target="_blank" } |
+| auth | [`rafaeldbo/auth`](https://hub.docker.com/r/rafaeldbo/auth){ target="_blank" } |
+| product | [`rafaeldbo/product`](https://hub.docker.com/r/rafaeldbo/product){ target="_blank" } |
+| order | [`rafaeldbo/order`](https://hub.docker.com/r/rafaeldbo/order){ target="_blank" } |
+| exchange | [`rafaeldbo/exchange`](https://hub.docker.com/r/rafaeldbo/exchange){ target="_blank" } |
+| gateway | [`rafaeldbo/gateway`](https://hub.docker.com/r/rafaeldbo/gateway){ target="_blank" } |
+
+Cada build publica duas tags: `latest` e o número do build do Jenkins. As
+imagens são multi-arquitetura (`amd64` e `arm64`), então rodam tanto nos nodes
+do EKS quanto em Macs com Apple Silicon.
+
 O estágio de deploy está implementado no `order-service`:
 
 ```groovy

@@ -28,7 +28,9 @@ As imagens são multi-arquitetura (`amd64` e `arm64`), com as tags `latest` e o
 número do build. O login no Docker Hub usa `--password-stdin`, para o token não
 aparecer na linha de comando.
 
-O estágio de deploy do order está detalhado em [CI/CD](../deploy/ci-cd.md).
+As imagens publicadas estão listadas, com link para o Docker Hub, em
+[CI/CD](../deploy/ci-cd.md#imagens-no-docker-hub). O estágio de deploy do order
+também está detalhado lá.
 
 Todos os serviços estão implantados e rodando no EKS. O order é atualizado pelo
 próprio pipeline (estágio `Deploy to K8s`); os demais, pelo script
