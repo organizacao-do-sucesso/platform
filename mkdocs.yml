@@ -142,5 +142,5 @@ nav:
       - AWS e EKS: deploy/aws.md
       - CI/CD: deploy/ci-cd.md
   - Teste de carga: testes-de-carga.md
-  - Custos e PaaS: custos.md
+  - Custos, PaaS e SLA: custos/index.md
   - Uso de IA: uso-de-ia.md
