@@ -14,14 +14,14 @@ pipeline na raiz do projeto cobrindo todos os serviços.
 O Jenkins roda em contêiner (porta `9080`), com Maven, Docker, `kubectl` e AWS
 CLI. O estágio SCM é o próprio *Pipeline from SCM* de cada job.
 
-| Repositório | Dependencies | Build | Push to Docker Hub | Deploy to K8s |
+| Repositório | Dependencies | Build | Push to Docker Hub | Deploy no EKS |
 | --- | --- | --- | --- | --- |
-| order-service | `order`, `product`, `exchange` | ✅ | ✅ | ✅ |
-| account-service | `account` | ✅ | ✅ | ❌ |
-| auth-service | `auth` | ✅ | ✅ | ❌ |
-| product-service | `product` | ✅ | ✅ | ❌ |
-| gateway-service | `auth` | ✅ | ✅ | ❌ |
-| exchange-service | — (Python) | — | ✅ | ❌ |
+| order-service | `order`, `product`, `exchange` | ✅ | ✅ | ✅ estágio `Deploy to K8s` |
+| account-service | `account` | ✅ | ✅ | ✅ `deploy-aws.ps1` |
+| auth-service | `auth` | ✅ | ✅ | ✅ `deploy-aws.ps1` |
+| product-service | `product` | ✅ | ✅ | ✅ `deploy-aws.ps1` |
+| gateway-service | `auth` | ✅ | ✅ | ✅ `deploy-aws.ps1` |
+| exchange-service | — (Python) | — | ✅ | ✅ `deploy-aws.ps1` |
 | contratos (`account`, `auth`, `product`, `order`, `exchange`) | só `auth` → `account` | ✅ `mvn install` | — | — |
 
 As imagens são multi-arquitetura (`amd64` e `arm64`), com as tags `latest` e o
@@ -30,6 +30,6 @@ aparecer na linha de comando.
 
 O estágio de deploy do order está detalhado em [CI/CD](../deploy/ci-cd.md).
 
-!!! warning "Pendente"
-    Copiar o estágio `Deploy to K8s` para os demais serviços e criar o pipeline
-    raiz do projeto.
+Todos os serviços estão implantados e rodando no EKS. O order é atualizado pelo
+próprio pipeline (estágio `Deploy to K8s`); os demais, pelo script
+`k8s/scripts/deploy-aws.ps1`, que aplica o overlay AWS do Kustomize.

@@ -51,7 +51,5 @@ stage('Deploy to K8s') {
 O deploy usa a tag do build (`$BUILD_ID`), e não `latest`, para que cada execução
 force um novo rollout e o histórico de versões fique rastreável.
 
-!!! warning "Pendente"
-    Replicar o estágio `Deploy to K8s` nos `Jenkinsfile`s de account, auth,
-    product, exchange e gateway, e criar um pipeline na raiz da plataforma que
-    dispare todos.
+Todos os serviços estão implantados e rodando no EKS: o order pelo estágio
+acima, os demais pelo script `k8s/scripts/deploy-aws.ps1`.
