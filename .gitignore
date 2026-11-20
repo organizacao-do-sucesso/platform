@@ -1,14 +1,36 @@
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+coverage/
+htmlcov/
+
+# Python environments
 venv/
 .venv/
+
+# Documentation
 site/
 
-# Ignore the entire VS Code configuration directory
+# Java / Maven
+target/
+*.iml
+
+# IDEs
+.idea/
 .vscode/
 
+# Operating systems
 .DS_Store
+Thumbs.db
 
 # API: local secrets and database data
 api/.env
+api/.env.*
+!api/.env.example
 api/.secrets/
 api/volume/
 
