@@ -29,6 +29,8 @@ Os arquivos esperados são:
 | `auth.env` | `auth-secret` | Chave Base64 usada para assinar os JWTs |
 | `account.env` | `account-secret` | Credenciais do banco e senha inicial do administrador |
 | `product.env` | `product-secret` | Credenciais do banco do serviço de produtos |
+| `order.env` | `order-secret` | Credenciais do banco do serviço de pedidos |
+| `grafana.env` | `grafana-secret` | Usuário e senha do administrador do Grafana |
 
 ## Cuidados importantes
 
@@ -37,9 +39,12 @@ Os arquivos esperados são:
   criado pelo RDS e mantenha `DATABASE_USERNAME` e `DATABASE_PASSWORD` iguais
   ao usuário mestre configurado na instância.
 - O `rds-secret` é gerado pelo Kustomize do overlay AWS e sobrescreve as
-  configurações de banco de `account` e `product`.
+  configurações de banco de `account`, `product` e `order`.
 - `JWT_SECRET_KEY` deve ser uma chave aleatória codificada em Base64, com pelo
   menos 32 bytes depois da decodificação.
+- `GF_SECURITY_ADMIN_PASSWORD` protege o Grafana, cuja rota no gateway é
+  pública. Troque o valor `CHANGE_ME_GRAFANA_PASSWORD` por uma senha forte; o
+  script de secrets não aceita o valor de exemplo.
 - `ADMIN_PASSWORD` é usado para criar o administrador quando ele ainda não
   existe. Alterar esse valor não troca automaticamente a senha de uma conta já
   criada.

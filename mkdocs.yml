@@ -1,11 +1,12 @@
-site_name: Platform - Distributed Systems, Containerization, Microservices, Architectures, API, DevOps, Cloud, Orchestration, Cloud Service Models
-site_author: <Your name here>
-site_url: https://<username-studies>.github.io/platform
-repo_url: https://github.com/<username-studies>/platform
-repo_name: github/platform
+site_name: Store — Plataformas, Microsserviços e APIs
+site_author: Luca Cazzolato Machado, Luísa Carvalho Farah, Rafael Dourado Bastos de Oliveira
+site_url: https://organizacao-do-sucesso.github.io/platform/
+repo_url: https://github.com/organizacao-do-sucesso/platform
+repo_name: organizacao-do-sucesso/platform
 
 theme:
   name: material
+  language: pt-BR
   palette:
     # primary: grey
     # Light mode
@@ -108,6 +109,7 @@ plugins:
   - glightbox
   - git-revision-date-localized:
       enable_creation_date: true
+      fallback_to_build_date: true
   - git-authors
   - search
   - badges
@@ -123,10 +125,22 @@ plugins:
 
 extra_javascript:
   - https://unpkg.com/mathjax/es5/tex-mml-chtml.js
-  - https://polyfill.io/v3/polyfill.min.js?features=es6
   - https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js
   - https://fastly.jsdelivr.net/npm/jquery/dist/jquery.min.js
   - https://fastly.jsdelivr.net/npm/echarts/dist/echarts.min.js
 
 nav:
-  - Home: index.md
+  - Início: index.md
+  - Arquitetura: arquitetura.md
+  - Microsserviços:
+      - Visão geral: microsservicos.md
+      - Order API: order.md
+  - Bottlenecks: bottlenecks.md
+  - Implantação:
+      - Docker Compose: deploy/local.md
+      - MiniKube: deploy/minikube.md
+      - AWS e EKS: deploy/aws.md
+      - CI/CD: deploy/ci-cd.md
+  - Teste de carga: testes-de-carga.md
+  - Custos e PaaS: custos.md
+  - Uso de IA: uso-de-ia.md

@@ -29,6 +29,9 @@ images:
   - name: store/gateway
     newName: rafaeldbo/gateway
     newTag: latest
+  - name: store/order
+    newName: rafaeldbo/order
+    newTag: latest
 
 patches:
   - path: postgres-emptydir.yaml
@@ -86,3 +89,15 @@ patches:
       - op: replace
         path: /spec/template/spec/containers/0/imagePullPolicy
         value: Always
+  - target:
+      kind: Deployment
+      name: order
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/imagePullPolicy
+        value: Always
+      - op: add
+        path: /spec/template/spec/containers/0/envFrom/-
+        value:
+          secretRef:
+            name: rds-secret

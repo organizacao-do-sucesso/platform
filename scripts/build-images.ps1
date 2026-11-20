@@ -55,6 +55,19 @@ Invoke-Checked 'Criando imagem exchange no Minikube' {
     minikube image build -t store/exchange:local (Join-Path $apiRoot 'exchange-service')
 }
 
+Invoke-Checked 'Instalando contrato exchange' {
+    mvn -B -f (Join-Path $apiRoot 'exchange/pom.xml') -DskipTests clean install
+}
+Invoke-Checked 'Instalando contrato order' {
+    mvn -B -f (Join-Path $apiRoot 'order/pom.xml') -DskipTests clean install
+}
+Invoke-Checked 'Empacotando order-service' {
+    mvn -B -f (Join-Path $apiRoot 'order-service/pom.xml') -DskipTests clean package
+}
+Invoke-Checked 'Criando imagem order no Minikube' {
+    minikube image build -t store/order:local (Join-Path $apiRoot 'order-service')
+}
+
 Invoke-Checked 'Empacotando gateway-service' {
     mvn -B -f (Join-Path $apiRoot 'gateway-service/pom.xml') -DskipTests clean package
 }

@@ -64,7 +64,7 @@ if ($LASTEXITCODE -ne 0) {
     throw 'Não foi possível aplicar os manifestos no EKS.'
 }
 
-foreach ($deployment in @('db', 'redis', 'account', 'auth', 'product', 'exchange', 'gateway')) {
+foreach ($deployment in @('db', 'redis', 'account', 'auth', 'product', 'exchange', 'order', 'gateway', 'prometheus', 'loki', 'alloy', 'grafana')) {
     Write-Host "Aguardando deployment/$deployment..." -ForegroundColor Cyan
     kubectl rollout status "deployment/$deployment" -n store --timeout=300s
     if ($LASTEXITCODE -ne 0) {

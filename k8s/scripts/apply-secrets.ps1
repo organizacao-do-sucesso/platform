@@ -28,6 +28,16 @@ $secretDefinitions = @(
         Name = 'product-secret'
         File = 'product.env'
         RequiredKeys = @('DATABASE_USERNAME', 'DATABASE_PASSWORD')
+    },
+    [pscustomobject]@{
+        Name = 'order-secret'
+        File = 'order.env'
+        RequiredKeys = @('DATABASE_USERNAME', 'DATABASE_PASSWORD')
+    },
+    [pscustomobject]@{
+        Name = 'grafana-secret'
+        File = 'grafana.env'
+        RequiredKeys = @('GF_SECURITY_ADMIN_USER', 'GF_SECURITY_ADMIN_PASSWORD')
     }
 )
 

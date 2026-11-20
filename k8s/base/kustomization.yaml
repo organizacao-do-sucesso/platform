@@ -10,3 +10,6 @@ resources:
   - https://github.com/organizacao-do-sucesso/product-service//k8s?ref=main&submodules=false
   - https://github.com/organizacao-do-sucesso/exchange-service//k8s?ref=main&submodules=false
   - https://github.com/organizacao-do-sucesso/gateway-service//k8s?ref=main&submodules=false
+  - https://github.com/organizacao-do-sucesso/order-service//k8s?ref=main&submodules=false
+  # observability keeps its kustomization at the repository root (shares configs with compose)
+  - https://github.com/organizacao-do-sucesso/observability?ref=main&submodules=false

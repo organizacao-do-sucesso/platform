@@ -20,6 +20,9 @@ images:
   - name: store/gateway
     newName: store/gateway
     newTag: local
+  - name: store/order
+    newName: store/order
+    newTag: local
 
 patches:
   - target:
@@ -53,6 +56,13 @@ patches:
   - target:
       kind: Deployment
       name: gateway
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/imagePullPolicy
+        value: Never
+  - target:
+      kind: Deployment
+      name: order
     patch: |-
       - op: replace
         path: /spec/template/spec/containers/0/imagePullPolicy
