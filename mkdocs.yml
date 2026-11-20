@@ -130,3 +130,4 @@ extra_javascript:
 
 nav:
   - Home: index.md
+  - Custos, PaaS e SLA: custos/index.md

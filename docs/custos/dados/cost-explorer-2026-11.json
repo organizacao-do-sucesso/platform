@@ -1,0 +1,44 @@
+{
+  "fonte": "AWS Cost Explorer (GetCostAndUsage, UnblendedCost), conta do projeto, us-east-1",
+  "extraido_em": "2026-11-20",
+  "periodo": {"inicio": "2026-11-01", "fim_exclusivo": "2026-11-21"},
+  "observacao": "Valores de 2026-11-20 são parciais (dia em andamento). Sem créditos aplicados (RECORD_TYPE = Usage + Tax).",
+  "custo_diario_usd": {
+    "2026-11-01": 8.48, "2026-11-02": 0, "2026-11-03": 0, "2026-11-04": 0,
+    "2026-11-05": 0, "2026-11-06": 0, "2026-11-07": 0, "2026-11-08": 0.349,
+    "2026-11-09": 0, "2026-11-10": 0, "2026-11-11": 1.835, "2026-11-12": 6.805,
+    "2026-11-13": 6.797, "2026-11-14": 6.795, "2026-11-15": 6.841, "2026-11-16": 6.95,
+    "2026-11-17": 7.913, "2026-11-18": 7.922, "2026-11-19": 7.931, "2026-11-20": 1.142
+  },
+  "horas_de_node_t2_small_por_dia": {
+    "2026-11-11": 11.7, "2026-11-12": 48, "2026-11-13": 48, "2026-11-14": 48,
+    "2026-11-15": 48, "2026-11-16": 51.9, "2026-11-17": 72.4, "2026-11-18": 72,
+    "2026-11-19": 72.4, "2026-11-20": 6.4
+  },
+  "custo_por_servico_usd": {
+    "Amazon EKS (control plane)": 20.2688,
+    "EC2 - Other (NAT Gateway, EBS, tráfego)": 19.954,
+    "Amazon EC2 - Compute (nodes)": 11.0378,
+    "Elastic Load Balancing (NLB)": 4.548,
+    "Amazon VPC (IPv4 público)": 4.0436,
+    "Amazon RDS": 1.3869,
+    "AWS Secrets Manager": 0.0405,
+    "Tax": 8.48
+  },
+  "custo_por_tipo_de_uso": {
+    "USE1-AmazonEKS-Hours:perCluster": {"usd": 20.2688, "qtd": 202.69, "unidade": "h"},
+    "NatGateway-Hours": {"usd": 18.45, "qtd": 410, "unidade": "h"},
+    "NatGateway-Bytes": {"usd": 0.3041, "qtd": 6.76, "unidade": "GB"},
+    "BoxUsage:t2.small": {"usd": 11.0378, "qtd": 479.90, "unidade": "h"},
+    "EBS:VolumeUsage.gp3": {"usd": 1.0398, "qtd": 13.0, "unidade": "GB-mês"},
+    "LoadBalancerUsage": {"usd": 4.545, "qtd": 202, "unidade": "h"},
+    "LCUUsage": {"usd": 0.003, "qtd": 0.50, "unidade": "NLCU-h"},
+    "USE1-PublicIPv4:InUseAddress": {"usd": 4.0428, "qtd": 808.56, "unidade": "IP-h"},
+    "InstanceUsage:db.t4g.micro": {"usd": 1.1561, "qtd": 72.25, "unidade": "h"},
+    "RDS:GP3-Storage": {"usd": 0.2308, "qtd": 2.01, "unidade": "GB-mês"},
+    "DataTransfer-Regional-Bytes": {"usd": 0.1601, "qtd": 16.01, "unidade": "GB"},
+    "USE1-AWSSecretsManager-Secrets": {"usd": 0.0405, "qtd": 0.10, "unidade": "segredo-mês"}
+  },
+  "totais_usd": {"uso": 61.28, "impostos": 8.48, "total": 69.76},
+  "previsao_restante_novembro_usd": 101.92
+}
