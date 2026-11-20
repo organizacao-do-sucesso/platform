@@ -12,7 +12,7 @@ cada integrante no `k8s/` do seu serviço · guia completo em
 | `Secret`, `ConfigMap`, `Deployment` e `Service` em cada arquivo | ConfigMap, Deployment e Service no `k8s.yaml`; os **Secrets ficam fora do git** (ver abaixo) |
 | Gateway exposto, demais serviços `ClusterIP` | Só o gateway é exposto (`NodePort 30080` no Minikube, NLB na AWS) |
 | Todos os serviços no mesmo cluster | Namespace `store`, montado por um único Kustomize |
-| Vídeo com os serviços rodando | :material-progress-clock: a gravar |
+| Vídeo com os serviços rodando | :material-check: gravado pelo grupo |
 
 ## Implementação
 

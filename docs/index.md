@@ -39,11 +39,11 @@ um de **implementação**, incluídos como submódulos neste repositório princi
 | Exercícios individuais (Product, Order, Exchange, Jenkins, MiniKube, Bottlenecks) | :material-check: documentados | [Exercícios individuais](exercicios/index.md) |
 | Microsserviços (account, auth, product, order, exchange, gateway) | :material-check: concluído | [Microsserviços](microsservicos.md) |
 | Bottlenecks | :material-check: concluído | [Bottlenecks](bottlenecks.md) |
-| Kubernetes local (MiniKube) | :material-check: manifests prontos (falta o vídeo) | [MiniKube](deploy/minikube.md) |
+| Kubernetes local (MiniKube) | :material-check: concluído | [MiniKube](deploy/minikube.md) |
 | AWS e EKS, com RDS | :material-check: guia e manifests prontos | [AWS e EKS](deploy/aws.md) |
 | CI/CD com Jenkins | :material-progress-clock: em andamento | [CI/CD](deploy/ci-cd.md) |
 | Testes de ponta a ponta (21 cenários) | :material-check: concluído | [Testes](testes.md) |
-| Teste de carga com HPA | :material-progress-clock: pendente | [Teste de carga](testes-de-carga.md) |
+| Teste de carga com HPA | :material-check: concluído (vídeo) | [Teste de carga](testes-de-carga.md) |
 | Custos, PaaS e SLA | :material-check: concluído | [Custos, PaaS e SLA](custos/index.md) |
-| Apresentação (vídeo de 1 a 2 min) | :material-progress-clock: pendente | — |
+| Apresentação (vídeo) | :material-check: concluído | [Apresentação](apresentacao.md) |
 | Uso de IA declarado | :material-check: concluído | [Uso de IA](uso-de-ia.md) |

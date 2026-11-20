@@ -25,9 +25,3 @@ Ferramenta: Claude (Anthropic).
 | Custos, PaaS e SLA: consultas ao Cost Explorer, estimativas na Pricing Calculator, scripts e rascunho da página | Levantamento de dados, scripts e redação inicial | Números conferidos no Cost Explorer, SLAs nas páginas oficiais da AWS, texto revisado |
 
 Detalhes na seção *Uso de IA* de [Custos, PaaS e SLA](custos/index.md#uso-de-ia).
-
-Demais partes: a preencher.
-
-## Rafael Dourado Bastos de Oliveira
-
-A preencher.
