@@ -1,43 +1,43 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
     <url>
-         <loc>https://&lt;username-studies&gt;.github.io/platform/</loc>
+         <loc>https://organizacao-do-sucesso.github.io/platform/</loc>
          <lastmod>2026-11-20</lastmod>
     </url>
     <url>
-         <loc>https://&lt;username-studies&gt;.github.io/platform/arquitetura/</loc>
+         <loc>https://organizacao-do-sucesso.github.io/platform/arquitetura/</loc>
          <lastmod>2026-11-20</lastmod>
     </url>
     <url>
-         <loc>https://&lt;username-studies&gt;.github.io/platform/bottlenecks/</loc>
+         <loc>https://organizacao-do-sucesso.github.io/platform/bottlenecks/</loc>
          <lastmod>2026-11-20</lastmod>
     </url>
     <url>
-         <loc>https://&lt;username-studies&gt;.github.io/platform/custos/</loc>
+         <loc>https://organizacao-do-sucesso.github.io/platform/custos/</loc>
          <lastmod>2026-11-20</lastmod>
     </url>
     <url>
-         <loc>https://&lt;username-studies&gt;.github.io/platform/microsservicos/</loc>
+         <loc>https://organizacao-do-sucesso.github.io/platform/microsservicos/</loc>
          <lastmod>2026-11-20</lastmod>
     </url>
     <url>
-         <loc>https://&lt;username-studies&gt;.github.io/platform/order/</loc>
+         <loc>https://organizacao-do-sucesso.github.io/platform/order/</loc>
          <lastmod>2026-11-20</lastmod>
     </url>
     <url>
-         <loc>https://&lt;username-studies&gt;.github.io/platform/deploy/aws/</loc>
+         <loc>https://organizacao-do-sucesso.github.io/platform/deploy/aws/</loc>
          <lastmod>2026-11-20</lastmod>
     </url>
     <url>
-         <loc>https://&lt;username-studies&gt;.github.io/platform/deploy/ci-cd/</loc>
+         <loc>https://organizacao-do-sucesso.github.io/platform/deploy/ci-cd/</loc>
          <lastmod>2026-11-20</lastmod>
     </url>
     <url>
-         <loc>https://&lt;username-studies&gt;.github.io/platform/deploy/local/</loc>
+         <loc>https://organizacao-do-sucesso.github.io/platform/deploy/local/</loc>
          <lastmod>2026-11-20</lastmod>
     </url>
     <url>
-         <loc>https://&lt;username-studies&gt;.github.io/platform/deploy/minikube/</loc>
+         <loc>https://organizacao-do-sucesso.github.io/platform/deploy/minikube/</loc>
          <lastmod>2026-11-20</lastmod>
     </url>
 </urlset>
