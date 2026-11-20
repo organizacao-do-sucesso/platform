@@ -16,6 +16,8 @@ O Jenkins roda em contêiner (`api/jenkins/compose.yaml`), com Maven, Docker,
 
 O estágio *Build & Push Image* publica cada serviço no Docker Hub, de onde o EKS
 baixa as imagens (overlay `k8s/overlays/aws`).
+Todas ficam no perfil
+[hub.docker.com/u/rafaeldbo](https://hub.docker.com/u/rafaeldbo){ target="_blank" }.
 
 | Serviço | Imagem |
 | --- | --- |
