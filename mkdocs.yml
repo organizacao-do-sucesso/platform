@@ -132,6 +132,14 @@ extra_javascript:
 nav:
   - Início: index.md
   - Arquitetura: arquitetura.md
+  - Exercícios individuais:
+      - Visão geral: exercicios/index.md
+      - Product API: exercicios/product.md
+      - Order API: exercicios/order.md
+      - Exchange API: exercicios/exchange.md
+      - Jenkins: exercicios/jenkins.md
+      - MiniKube: exercicios/minikube.md
+      - Bottlenecks: exercicios/bottlenecks.md
   - Microsserviços:
       - Visão geral: microsservicos.md
       - Order API: order.md

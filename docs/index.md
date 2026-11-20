@@ -36,6 +36,7 @@ um de **implementação**, incluídos como submódulos neste repositório princi
 
 | Entrega | Situação | Onde |
 | --- | --- | --- |
+| Exercícios individuais (Product, Order, Exchange, Jenkins, MiniKube, Bottlenecks) | :material-check: documentados | [Exercícios individuais](exercicios/index.md) |
 | Microsserviços (account, auth, product, order, exchange, gateway) | :material-check: concluído | [Microsserviços](microsservicos.md) |
 | Bottlenecks | :material-check: concluído | [Bottlenecks](bottlenecks.md) |
 | Kubernetes local (MiniKube) | :material-check: manifests prontos (falta o vídeo) | [MiniKube](deploy/minikube.md) |
