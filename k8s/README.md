@@ -8,7 +8,7 @@ uma instância privada do Amazon RDS.
 
 ## Conteúdo
 
-- [`base`](base): reúne namespace, PostgreSQL e as bases Kubernetes remotas dos
+- [`base`](base): reúne namespace, Redis e as bases Kubernetes remotas dos
   microsserviços.
 - [`overlays/minikube`](overlays/minikube): imagens locais e exposição
   `NodePort` para o Minikube.
@@ -69,16 +69,16 @@ aplicada somente quando desejada, seguindo sua seção no [`AWS.md`](AWS.md).
 
 A seção 8 de [`AWS.md`](AWS.md) cria um RDS for PostgreSQL Single-AZ
 `db.t4g.micro`, privado e criptografado. O overlay AWS gera `rds-secret` a
-partir do arquivo ignorado `api/.secrets/rds.env` e o injeta somente em
-`account` e `product`.
+partir do arquivo ignorado `api/.secrets/rds.env` e o injeta em `account`,
+`product` e `order`.
 
 O endpoint do RDS não é versionado. Depois de criar ou reconstruir a instância,
 atualize `DATABASE_HOST` no arquivo local antes de executar `deploy-aws.ps1`.
 O usuário e a senha mestre são gerenciados pelo AWS Secrets Manager e copiados
 para esse arquivo local sem serem exibidos no terminal.
-O PostgreSQL definido em `base/postgres.yaml` permanece disponível no Minikube
-e, temporariamente, no overlay AWS para os serviços ainda não migrados. Por
-isso, a migração de `account` e `product` não interrompe esses serviços.
+O PostgreSQL definido em `overlays/minikube/postgres.yaml` permanece disponível
+somente no Minikube. A AWS não renderiza esses recursos, pois todos os serviços
+que usam banco relacional são conectados ao RDS.
 
 Ao preparar uma release, inclua as alterações deste guia e do README no commit
 da plataforma e confirme que a referência versionada do `gateway-service`
@@ -101,8 +101,8 @@ o valor de exemplo `CHANGE_ME_RDS_ENDPOINT`.
 
 Os scripts de deploy interrompem a execução se algum arquivo, chave ou valor obrigatório estiver ausente. Antes de
 aplicar o Kustomize, eles executam `scripts/apply-secrets.ps1`, que cria ou
-atualiza `postgres-secret`, `auth-secret`, `account-secret` e `product-secret`
-no namespace `store`.
+atualiza `postgres-secret`, `auth-secret`, `account-secret`, `product-secret`,
+`order-secret` e `grafana-secret` no namespace `store`.
 
 Valide os arquivos locais sem acessar nenhum cluster:
 
@@ -119,13 +119,16 @@ datasources e dashboard do Grafana). Ela cria no namespace `store`:
 - **Prometheus**, que descobre pela API do Kubernetes os pods anotados com
   `prometheus.io/scrape: "true"` (hoje, o `order`);
 - **Alloy**, que envia ao Loki os logs de todos os pods do namespace;
-- **Loki** e **Grafana**, com o dashboard *Store - Services* provisionado.
+- **kube-state-metrics**, para expor o estado de Pods, Deployments, Nodes e HPA;
+- **Loki** e **Grafana**, com os dashboards *Store - Services* e
+  *Gateway - Autoscaling* provisionados.
 
 Nada disso é exposto diretamente: o gateway encaminha `/grafana/**` (rota
 pública, protegida pelo login do Grafana) e `/prometheus/**` (exige login da
 loja com o papel `administrator`). O `grafana-secret` vem de
 `api/.secrets/grafana.env`; troque a senha de exemplo antes do deploy.
 
-Na AWS, ajuste `OBSERVABILITY_PUBLIC_URL` no ConfigMap `observability-config`
-para o endereço público do gateway, usado pelo Grafana e pelo Prometheus para
-montar links e redirecionamentos.
+Na AWS, `deploy-aws.ps1` descobre automaticamente o hostname de
+`gateway-public` quando o Service já existe. Após criar o NLB pela primeira vez,
+execute `scripts/configure-observability-url.ps1`; ele atualiza
+`OBSERVABILITY_PUBLIC_URL` e reinicia Grafana e Prometheus.

@@ -64,7 +64,7 @@ if ($LASTEXITCODE -ne 0) {
     throw 'Não foi possível aplicar os manifestos no EKS.'
 }
 
-foreach ($deployment in @('redis', 'account', 'auth', 'product', 'exchange', 'order', 'gateway', 'prometheus', 'loki', 'alloy', 'grafana')) {
+foreach ($deployment in @('redis', 'account', 'auth', 'product', 'exchange', 'order', 'gateway', 'prometheus', 'loki', 'alloy', 'grafana', 'kube-state-metrics')) {
     Write-Host "Aguardando deployment/$deployment..." -ForegroundColor Cyan
     kubectl rollout status "deployment/$deployment" -n store --timeout=300s
     if ($LASTEXITCODE -ne 0) {
@@ -72,6 +72,21 @@ foreach ($deployment in @('redis', 'account', 'auth', 'product', 'exchange', 'or
         kubectl get events -n store --sort-by='.lastTimestamp'
         throw "O deployment/$deployment não ficou pronto."
     }
+}
+
+$gatewayHost = kubectl get service gateway-public `
+    --namespace store `
+    --ignore-not-found `
+    --output jsonpath='{.status.loadBalancer.ingress[0].hostname}'
+if ($LASTEXITCODE -ne 0) {
+    throw 'Não foi possível consultar service/gateway-public.'
+}
+
+if ([string]::IsNullOrWhiteSpace($gatewayHost)) {
+    Write-Warning 'gateway-public ainda não possui hostname. Execute configure-observability-url.ps1 após criar o NLB.'
+} else {
+    $configureObservability = Join-Path $PSScriptRoot 'configure-observability-url.ps1'
+    & $configureObservability -PublicUrl "http://$($gatewayHost.Trim())"
 }
 
 Write-Host "`nAplicação pronta no EKS." -ForegroundColor Green

@@ -1,8 +1,9 @@
 # AWS/EKS pelo AWS CLI: criação, publicação e remoção
 
 Este guia cria na AWS o ambiente necessário para executar os microsserviços
-`account`, `auth`, `product` e `gateway`, com PostgreSQL gerenciado pelo Amazon
-RDS. O gateway é publicado na internet por um Network Load Balancer (NLB).
+`account`, `auth`, `product`, `exchange`, `order` e `gateway`, com PostgreSQL
+gerenciado pelo Amazon RDS. O gateway é publicado na internet por um Network
+Load Balancer (NLB).
 O último capítulo remove todos os recursos para encerrar a cobrança.
 
 > **Atenção a custos:** a stack de rede cria dois NAT Gateways; o cluster EKS,
@@ -24,7 +25,7 @@ O último capítulo remove todos os recursos para encerrar a cobrança.
 - Cluster Autoscaler ajustando automaticamente a quantidade de nodes.
 - RDS for PostgreSQL Single-AZ `db.t4g.micro`, com 20 GiB de armazenamento gp3
   criptografado e endpoint privado.
-- Microsserviços `account`, `auth`, `product` e `gateway`.
+- Microsserviços `account`, `auth`, `product`, `exchange`, `order` e `gateway`.
 - AWS Load Balancer Controller com EKS Pod Identity.
 - NLB público encaminhando a porta 80 para o gateway na porta 8080.
 
@@ -32,10 +33,9 @@ Opcionalmente, a seção 11 instala o Metrics Server e cria um HPA para manter
 entre 1 e 10 réplicas do gateway com alvo de 50% de CPU. O HPA não é necessário
 para criar o cluster, executar a aplicação ou usar o Cluster Autoscaler.
 
-O overlay AWS conecta `account` e `product` ao RDS. O PostgreSQL da base é
-mantido temporariamente para os serviços ainda não migrados, sem alterar o
-banco usado por `account` e `product`. O overlay Minikube continua usando o
-PostgreSQL definido na base.
+O overlay AWS conecta `account`, `product` e `order` ao RDS e remove o
+PostgreSQL interno. O overlay Minikube continua usando o PostgreSQL definido na
+base.
 
 ## 2. Pré-requisitos locais
 
@@ -693,12 +693,38 @@ kubectl logs `
 Os logs devem mostrar o node group descoberto, sem erros de credenciais ou de
 permissão.
 
-## 10. Criar os pods dos microsserviços
+## 10. Criar os pods dos microsserviços e da observabilidade
 
-O overlay `k8s/overlays/aws` usa as imagens públicas, conecta `account` e
-`product` ao RDS por meio do `rds-secret` e mantém o gateway inicialmente como
-`ClusterIP`. O PostgreSQL interno permanece disponível somente para os serviços
-ainda não migrados.
+O overlay `k8s/overlays/aws` usa as imagens públicas e conecta `account`,
+`product` e `order` ao RDS por meio do `rds-secret`. Não existe PostgreSQL
+interno nesse ambiente. O gateway permanece inicialmente como `ClusterIP`. A
+base também inclui Prometheus, Loki, Alloy, Grafana e kube-state-metrics a
+partir do repositório remoto `observability`.
+
+### 10.1. Preparar as credenciais locais
+
+O Grafana usa o mesmo fluxo local de Secrets dos demais componentes. Copie os
+arquivos de exemplo caso ainda não tenha preparado `api/.secrets`:
+
+```powershell
+New-Item -ItemType Directory -Force api/.secrets | Out-Null
+Copy-Item api/.secrets.example/*.env api/.secrets/
+```
+
+Antes de usar a AWS, troque os valores de desenvolvimento, inclusive
+`GF_SECURITY_ADMIN_PASSWORD` em `api/.secrets/grafana.env`, e valide todos os
+arquivos sem acessar o cluster:
+
+```powershell
+./k8s/scripts/apply-secrets.ps1 -ValidateOnly
+```
+
+O `deploy-aws.ps1` cria ou atualiza automaticamente `grafana-secret` junto com
+os demais Secrets antes de aplicar os manifests. Ele também valida
+`api/.secrets/rds.env`; `DATABASE_HOST` deve conter o endpoint obtido na seção
+8, e não o valor `CHANGE_ME_RDS_ENDPOINT`.
+
+### 10.2. Aplicar a plataforma
 
 ```powershell
 kubectl kustomize `
@@ -707,16 +733,25 @@ kubectl kustomize `
 ./k8s/scripts/deploy-aws.ps1
 ```
 
-O script cria no namespace `store` deployments e services para `db`,
-`account`, `auth`, `product` e `gateway`. Confirme:
+`LoadRestrictionsNone` é necessário porque o Kustomization lê configurações
+canônicas fora do diretório do overlay. Use essa opção somente neste repositório
+confiável.
+
+O script cria no namespace `store` os deployments e services dos
+microsserviços, Redis e observabilidade. O PostgreSQL interno não é criado na
+AWS.
+
+### 10.3. Validar os recursos
+
+Confirme os microsserviços:
 
 ```powershell
 kubectl get deployments,pods,services -n store -o wide
 kubectl logs -n store deployment/account --tail=100
 kubectl logs -n store deployment/auth --tail=100
 kubectl logs -n store deployment/product --tail=100
+kubectl logs -n store deployment/order --tail=100
 kubectl logs -n store deployment/gateway --tail=100
-kubectl get deployment/db service/db --namespace store
 
 aws rds describe-db-instances `
   --db-instance-identifier $RdsIdentifier `
@@ -726,9 +761,26 @@ aws rds describe-db-instances `
 ```
 
 O RDS deve aparecer como `available`, com endpoint preenchido e `public` igual
-a `false`. `Account` e `product` devem referenciar `rds-secret`.
+a `false`. `Account`, `product` e `order` devem referenciar `rds-secret`.
 
-Todos os deployments devem aparecer como `1/1` disponíveis.
+Confirme também a observabilidade:
+
+```powershell
+foreach ($Deployment in @('prometheus', 'loki', 'alloy', 'grafana', 'kube-state-metrics')) {
+  kubectl rollout status `
+    "deployment/$Deployment" `
+    --namespace store `
+    --timeout=300s
+}
+
+kubectl get services `
+  prometheus loki grafana `
+  --namespace store
+```
+
+Todos os deployments devem aparecer como `1/1` disponíveis. O Prometheus e o
+Grafana serão acessados pelas rotas `/prometheus/` e `/grafana/` do gateway;
+Loki e Alloy permanecem internos ao cluster.
 
 ## 11. Opcional: configurar o HPA do gateway
 
@@ -931,7 +983,13 @@ $GatewayHost = kubectl get service gateway-public `
   -o jsonpath='{.status.loadBalancer.ingress[0].hostname}'
 $BaseUrl = "http://$GatewayHost"
 $BaseUrl
+
+./k8s/scripts/configure-observability-url.ps1
 ```
+
+O último comando lê o hostname atual do NLB, atualiza
+`OBSERVABILITY_PUBLIC_URL` e reinicia Prometheus e Grafana. Execute-o novamente
+sempre que `gateway-public` for recriado com outro hostname.
 
 O NLB pode levar mais alguns minutos para considerar os targets saudáveis:
 
@@ -978,7 +1036,7 @@ aws elbv2 describe-load-balancers `
 Problemas comuns:
 
 - `ImagePullBackOff`: confirme que `rafaeldbo/*:latest` está público.
-- `account` ou `product` reiniciando: confirme o status do RDS, o endpoint em
+- `account`, `product` ou `order` reiniciando: confirme o status do RDS, o endpoint em
   `api/.secrets/rds.env`, o `rds-secret` e a regra TCP 5432 do security group.
 - Pods permanecem `Pending` sem novos nodes: confira os logs, a Pod Identity e
   a policy IAM do Cluster Autoscaler.

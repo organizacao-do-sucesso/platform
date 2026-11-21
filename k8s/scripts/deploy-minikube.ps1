@@ -30,7 +30,7 @@ foreach ($deployment in @('account', 'auth', 'product', 'exchange', 'order', 'ga
     }
 }
 
-foreach ($deployment in @('db', 'redis', 'account', 'auth', 'product', 'exchange', 'order', 'gateway', 'prometheus', 'loki', 'alloy', 'grafana')) {
+foreach ($deployment in @('db', 'redis', 'account', 'auth', 'product', 'exchange', 'order', 'gateway', 'prometheus', 'loki', 'alloy', 'grafana', 'kube-state-metrics')) {
     Write-Host "Aguardando deployment/$deployment..." -ForegroundColor Cyan
     kubectl rollout status "deployment/$deployment" -n store --timeout=180s
     if ($LASTEXITCODE -ne 0) {
