@@ -1,8 +1,11 @@
 # Order API
 
-Implementada em [order](https://github.com/organizacao-do-sucesso/order)
-(contrato) e [order-service](https://github.com/organizacao-do-sucesso/order-service)
-(implementação). Os pedidos pertencem ao usuário autenticado, identificado pelo
+*Responsável: Luísa Carvalho Farah · código:
+[order](https://github.com/organizacao-do-sucesso/order) (contrato) e
+[order-service](https://github.com/organizacao-do-sucesso/order-service)
+(implementação)*
+
+Os pedidos pertencem ao usuário autenticado, identificado pelo
 header `id-account` que o gateway injeta.
 
 ## Funcionamento
@@ -15,6 +18,17 @@ header `id-account` que o gateway injeta.
 3. **Detalhar** (`GET /orders/{id}`): devolve `404` se o pedido não for do
    usuário. Com `?currency=BRL`, busca a taxa no exchange pelo contrato
    `exchange` e converte os totais.
+
+## Implementação
+
+- **Usa os contratos dos outros serviços**, sem reimplementar nada: o
+  `ProductController` e o `ExchangeController` vêm dos repositórios `product` e
+  `exchange`.
+- **O preço é copiado para o item** no momento do pedido, então mudar o preço
+  do produto depois não altera pedidos antigos.
+- **Banco:** schema `orders`, tabelas `orders` e `items`, criadas pelo Flyway.
+- **Kubernetes:** `k8s/k8s.yaml` com probes no actuator e anotações para o
+  Prometheus coletar as métricas; na AWS, usa o RDS.
 
 ## Exemplos
 

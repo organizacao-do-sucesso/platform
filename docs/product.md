@@ -5,30 +5,31 @@
 [product-service](https://github.com/organizacao-do-sucesso/product-service)
 (implementação)*
 
-## O que o enunciado pede
+Catálogo de produtos. Qualquer usuário logado consulta; só `product-manager` e
+`administrator` criam e removem.
 
-Uma API REST de produtos, acessível só a usuários autenticados, com quatro
-operações.
+## Rotas
 
-| Requisito | Como foi atendido |
-| --- | --- |
-| `POST /products` com `name`, `price` e `unit`, retornando `201` e o `id` | `ProductResource.create`, com header `Location` |
-| `GET /products` retornando `200` | `ProductResource.findAll` |
-| `GET /products/{id}` retornando `200` | `ProductResource.findById`; `404` se não existir |
-| `DELETE /products/{id}` retornando `204` | `ProductResource.delete` |
-| Usuário autenticado | Gateway exige login; leitura pede `product.read`, escrita `product.write` |
-| Extra: validação de entrada | Nome e unidade obrigatórios, preço ≥ 0 (`400` caso contrário) |
-| Extra: papéis (admin gerencia produtos) | RBAC no gateway: só `product-manager` e `administrator` escrevem |
+| Método | Rota | Descrição | Permissão |
+| --- | --- | --- | --- |
+| `POST` | `/products` | Cria um produto (`201`, com header `Location`) | `product.write` |
+| `GET` | `/products` | Lista os produtos | `product.read` |
+| `GET` | `/products/{id}` | Busca um produto (`404` se não existir) | `product.read` |
+| `DELETE` | `/products/{id}` | Remove um produto (`204`) | `product.write` |
+
+Nome e unidade são obrigatórios e o preço não pode ser negativo; caso
+contrário, a resposta é `400`.
 
 ## Implementação
 
 - **Contrato `product`:** `ProductController` (interface `@FeignClient`),
   `ProductIn` e `ProductOut`. O preço é `BigDecimal`, para não perder centavos.
+  O order usa esse mesmo contrato para consultar produtos.
 - **Serviço:** `ProductResource` → `ProductService` → `ProductRepository`
   (Spring Data JPA), com o modelo separado do DTO (`ProductParser`).
 - **Banco:** schema `products`, criado pelo Flyway, com `price NUMERIC(19, 2)`.
 
-## Como testar
+## Exemplo
 
 ```bash
 # com o cookie de um usuário administrator

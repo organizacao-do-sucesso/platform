@@ -46,7 +46,8 @@ account e assina JWTs com uma chave HMAC.
 ## Account
 
 Contas, hash de senha e papéis, no schema `accounts`. Ao subir, cria o
-administrador definido por `ADMIN_EMAIL` e `ADMIN_PASSWORD`.
+administrador definido por `ADMIN_EMAIL` e `ADMIN_PASSWORD`. Detalhes em
+[Account API](account.md).
 
 | Método | Rota | Descrição |
 | --- | --- | --- |
@@ -59,7 +60,7 @@ administrador definido por `ADMIN_EMAIL` e `ADMIN_PASSWORD`.
 ## Product
 
 Catálogo de produtos, no schema `products`, com validação de nome, preço e
-unidade.
+unidade. Detalhes em [Product API](product.md).
 
 | Método | Rota | Descrição |
 | --- | --- | --- |
@@ -81,7 +82,8 @@ Detalhes em [Order API](order.md).
 ## Exchange
 
 Cotação entre moedas, em Python (FastAPI). Busca a taxa na PTAX do Banco
-Central e guarda no Redis por 5 minutos.
+Central e guarda no Redis por 5 minutos. Detalhes em
+[Exchange API](exchange.md).
 
 | Método | Rota | Descrição |
 | --- | --- | --- |

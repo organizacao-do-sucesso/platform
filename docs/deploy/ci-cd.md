@@ -1,7 +1,8 @@
 # CI/CD
 
-O Jenkins roda em contêiner (`api/jenkins/compose.yaml`), com Maven, Docker,
-`kubectl` e AWS CLI instalados. Cada repositório tem seu `Jenkinsfile`.
+O Jenkins roda em contêiner (`api/jenkins/compose.yaml`, porta `9080`), com
+Maven, Docker, `kubectl` e AWS CLI instalados. Cada repositório tem seu
+`Jenkinsfile`, e o estágio SCM é o próprio *Pipeline from SCM* de cada job.
 
 ## Estágios
 
@@ -10,6 +11,19 @@ O Jenkins roda em contêiner (`api/jenkins/compose.yaml`), com Maven, Docker,
 | Dependencies | Dispara os jobs dos contratos dos quais o serviço depende |
 | Build | `mvn clean package` |
 | Build & Push Image | Imagem multi-arquitetura (`amd64` e `arm64`) enviada ao Docker Hub com as tags `latest` e o número do build |
+
+| Repositório | Dependencies | Build | Push |
+| --- | --- | --- | --- |
+| order-service | `order`, `product`, `exchange` | ✅ | ✅ |
+| account-service | `account` | ✅ | ✅ |
+| auth-service | `auth` | ✅ | ✅ |
+| product-service | `product` | ✅ | ✅ |
+| gateway-service | `auth` | ✅ | ✅ |
+| exchange-service | — (Python) | — | ✅ |
+| contratos (`account`, `auth`, `product`, `order`, `exchange`) | só `auth` → `account` | ✅ `mvn install` | — |
+
+O login no Docker Hub usa `--password-stdin`, para o token não aparecer na linha
+de comando.
 
 ## Imagens no Docker Hub
 
