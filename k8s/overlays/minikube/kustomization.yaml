@@ -3,6 +3,7 @@ kind: Kustomization
 
 resources:
   - ../../base
+  - postgres.yaml
 
 images:
   - name: store/account
