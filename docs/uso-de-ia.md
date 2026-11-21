@@ -14,7 +14,6 @@ Ferramenta: Claude (Anthropic).
 | Observabilidade: repositório `observability` (Compose e Kubernetes), dashboard do Grafana, métricas do order-service | Implementação | Execução da stack, validação no Grafana e no Prometheus |
 | Exposição de Grafana e Prometheus pelo gateway, restrição do Prometheus ao papel `administrator` | Implementação | Testes `401`/`403` pelo gateway |
 | Manifests Kubernetes do order-service e da observabilidade, integração no `platform` | Implementação | Renderização com Kustomize e validação de schema |
-| Estágio `Deploy to K8s` do Jenkins no order-service | Implementação | — |
 | Script de testes de ponta a ponta (21 cenários) | Implementação | Execução local |
 | Esta documentação (MkDocs) | Redação inicial | Leitura e correção do conteúdo |
 

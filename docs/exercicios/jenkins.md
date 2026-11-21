@@ -16,7 +16,7 @@ CLI. O estágio SCM é o próprio *Pipeline from SCM* de cada job.
 
 | Repositório | Dependencies | Build | Push to Docker Hub | Deploy no EKS |
 | --- | --- | --- | --- | --- |
-| order-service | `order`, `product`, `exchange` | ✅ | ✅ | ✅ estágio `Deploy to K8s` |
+| order-service | `order`, `product`, `exchange` | ✅ | ✅ | ✅ `deploy-aws.ps1` |
 | account-service | `account` | ✅ | ✅ | ✅ `deploy-aws.ps1` |
 | auth-service | `auth` | ✅ | ✅ | ✅ `deploy-aws.ps1` |
 | product-service | `product` | ✅ | ✅ | ✅ `deploy-aws.ps1` |
@@ -29,9 +29,9 @@ número do build. O login no Docker Hub usa `--password-stdin`, para o token nã
 aparecer na linha de comando.
 
 As imagens publicadas estão listadas, com link para o Docker Hub, em
-[CI/CD](../deploy/ci-cd.md#imagens-no-docker-hub). O estágio de deploy do order
-também está detalhado lá.
+[CI/CD](../deploy/ci-cd.md#imagens-no-docker-hub), junto com o processo de
+deploy no EKS.
 
-Todos os serviços estão implantados e rodando no EKS. O order é atualizado pelo
-próprio pipeline (estágio `Deploy to K8s`); os demais, pelo script
-`k8s/scripts/deploy-aws.ps1`, que aplica o overlay AWS do Kustomize.
+Todos os serviços estão implantados e rodando no EKS. O Jenkins publica as
+imagens no Docker Hub, e o script `k8s/scripts/deploy-aws.ps1` aplica o overlay
+AWS do Kustomize, que baixa as imagens mais recentes.

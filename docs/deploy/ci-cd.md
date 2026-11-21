@@ -10,7 +10,6 @@ O Jenkins roda em contêiner (`api/jenkins/compose.yaml`), com Maven, Docker,
 | Dependencies | Dispara os jobs dos contratos dos quais o serviço depende |
 | Build | `mvn clean package` |
 | Build & Push Image | Imagem multi-arquitetura (`amd64` e `arm64`) enviada ao Docker Hub com as tags `latest` e o número do build |
-| Deploy to K8s | Atualiza a imagem do Deployment no EKS e aguarda o rollout |
 
 ## Imagens no Docker Hub
 
@@ -32,44 +31,23 @@ Cada build publica duas tags: `latest` e o número do build do Jenkins. As
 imagens são multi-arquitetura (`amd64` e `arm64`), então rodam tanto nos nodes
 do EKS quanto em Macs com Apple Silicon.
 
-O estágio de deploy está implementado no `order-service`:
+## Deploy no EKS
 
-```groovy
-stage('Deploy to K8s') {
-    environment {
-        CLUSTER = 'eks-store'
-        REGION = 'us-east-1'
-        NAMESPACE = 'store'
-    }
-    steps {
-        withCredentials([
-            usernamePassword(credentialsId: 'dockerhub-credential',
-                usernameVariable: 'USERNAME', passwordVariable: 'TOKEN'),
-            usernamePassword(credentialsId: 'aws-credential',
-                usernameVariable: 'AWS_ACCESS_KEY_ID', passwordVariable: 'AWS_SECRET_ACCESS_KEY')
-        ]) {
-            sh '''
-                export KUBECONFIG="$WORKSPACE/.kubeconfig"
-                aws eks update-kubeconfig --name "$CLUSTER" --region "$REGION"
-                kubectl -n "$NAMESPACE" set image "deployment/$SERVICE" "$SERVICE=$USERNAME/$SERVICE:$BUILD_ID"
-                kubectl -n "$NAMESPACE" rollout status "deployment/$SERVICE" --timeout=300s
-            '''
-        }
-    }
-}
+O pipeline termina no push da imagem. A implantação no cluster é feita pelo
+script `k8s/scripts/deploy-aws.ps1`, que aplica o overlay AWS do Kustomize: todos
+os Deployments usam a tag `latest` com `imagePullPolicy: Always`, então cada
+aplicação do overlay baixa a versão mais recente publicada pelo Jenkins.
+
+Para atualizar um serviço já implantado depois de um novo build:
+
+```bash
+kubectl rollout restart deployment/<serviço> -n store
+kubectl rollout status deployment/<serviço> -n store
 ```
 
-## Pré-requisitos no Jenkins e na AWS
+O `rollout restart` recria os pods, que baixam de novo a imagem `latest`. Os pods
+antigos só saem depois que os novos passam na `readinessProbe`, então a troca
+acontece sem indisponibilidade.
 
-1. Credencial `dockerhub-credential` (usuário e token do Docker Hub), já usada
-   pelo push das imagens.
-2. Credencial `aws-credential` do tipo *username with password*: usuário = Access
-   Key ID, senha = Secret Access Key de um usuário IAM dedicado ao Jenkins.
-3. Esse usuário IAM precisa de acesso ao cluster `eks-store`, por uma *access
-   entry* do EKS com permissão de editar o namespace `store`.
-
-O deploy usa a tag do build (`$BUILD_ID`), e não `latest`, para que cada execução
-force um novo rollout e o histórico de versões fique rastreável.
-
-Todos os serviços estão implantados e rodando no EKS: o order pelo estágio
-acima, os demais pelo script `k8s/scripts/deploy-aws.ps1`.
+Separar o build (Jenkins) do deploy (script) mantém as credenciais da AWS fora
+do Jenkins: só quem tem acesso ao cluster aplica mudanças nele.
