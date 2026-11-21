@@ -5,6 +5,10 @@
          <lastmod>2026-11-21</lastmod>
     </url>
     <url>
+         <loc>https://organizacao-do-sucesso.github.io/platform/account/</loc>
+         <lastmod>2026-11-21</lastmod>
+    </url>
+    <url>
          <loc>https://organizacao-do-sucesso.github.io/platform/apresentacao/</loc>
          <lastmod>2026-11-21</lastmod>
     </url>
@@ -17,11 +21,19 @@
          <lastmod>2026-11-21</lastmod>
     </url>
     <url>
+         <loc>https://organizacao-do-sucesso.github.io/platform/exchange/</loc>
+         <lastmod>2026-11-21</lastmod>
+    </url>
+    <url>
          <loc>https://organizacao-do-sucesso.github.io/platform/microsservicos/</loc>
          <lastmod>2026-11-21</lastmod>
     </url>
     <url>
          <loc>https://organizacao-do-sucesso.github.io/platform/order/</loc>
+         <lastmod>2026-11-21</lastmod>
+    </url>
+    <url>
+         <loc>https://organizacao-do-sucesso.github.io/platform/product/</loc>
          <lastmod>2026-11-21</lastmod>
     </url>
     <url>
@@ -54,34 +66,6 @@
     </url>
     <url>
          <loc>https://organizacao-do-sucesso.github.io/platform/deploy/minikube/</loc>
-         <lastmod>2026-11-21</lastmod>
-    </url>
-    <url>
-         <loc>https://organizacao-do-sucesso.github.io/platform/exercicios/</loc>
-         <lastmod>2026-11-21</lastmod>
-    </url>
-    <url>
-         <loc>https://organizacao-do-sucesso.github.io/platform/exercicios/bottlenecks/</loc>
-         <lastmod>2026-11-21</lastmod>
-    </url>
-    <url>
-         <loc>https://organizacao-do-sucesso.github.io/platform/exercicios/exchange/</loc>
-         <lastmod>2026-11-21</lastmod>
-    </url>
-    <url>
-         <loc>https://organizacao-do-sucesso.github.io/platform/exercicios/jenkins/</loc>
-         <lastmod>2026-11-21</lastmod>
-    </url>
-    <url>
-         <loc>https://organizacao-do-sucesso.github.io/platform/exercicios/minikube/</loc>
-         <lastmod>2026-11-21</lastmod>
-    </url>
-    <url>
-         <loc>https://organizacao-do-sucesso.github.io/platform/exercicios/order/</loc>
-         <lastmod>2026-11-21</lastmod>
-    </url>
-    <url>
-         <loc>https://organizacao-do-sucesso.github.io/platform/exercicios/product/</loc>
          <lastmod>2026-11-21</lastmod>
     </url>
 </urlset>
